@@ -1,0 +1,26 @@
+[
+      {
+        "source": [
+          "département"
+        ],
+        "ref": [
+          "departement"
+        ]
+      },
+      {
+        "source": [
+          "Lycées sources"
+        ],
+        "ref": [
+          "full_name"
+        ]
+      },
+      {
+        "source": [
+          "commune"
+        ],
+        "ref": [
+          "localite_acheminement_uai"
+        ]
+      }
+]

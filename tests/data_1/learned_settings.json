@@ -1,0 +1,7 @@
+{
+"query_template": [["must", "commune", "localite_acheminement_uai", ".french", 1], ["should", "Lycées sources", "full_name", ".integers", 1], ["must", "Lycées sources", "full_name", ".french", 1]],
+"must": {},
+"must_not": {},
+"thresh":  3.5723014,
+"exact_pairs": [[956, "123"], [1133, "125"]]
+}
