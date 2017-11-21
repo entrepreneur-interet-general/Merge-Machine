@@ -21,16 +21,13 @@ Problem with precision when no match found during labelling
 
 """
 
-from elasticsearch import Elasticsearch
 import numpy as np
 import pandas as pd
 
 from .es_helpers import _bulk_search
 
-from .es_connection import es
 
-
-def es_linker(source, params):
+def es_linker(es, source, params):
     '''
     Link source to reference following instructions in params. Return 
     concatenation of source and reference with the matches found
@@ -38,7 +35,7 @@ def es_linker(source, params):
     INPUT:
         source: pandas.DataFrame containing all source items
         params:
-            es_conn: Parameters for the elasticsearch connection
+            es: Elasticsearch connection
             index_name: name of the Elasticsearch index to fetch from
             query_template: The query template
             threshold: minimum value of score for this query_template for a match

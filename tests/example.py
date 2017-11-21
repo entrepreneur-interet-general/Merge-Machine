@@ -10,9 +10,9 @@ import json
 from elasticsearch import Elasticsearch, client
 import pandas as pd
 
-from es_insert
-from es_labeller import ConsoleLabeller
-from es_match import es_linker
+from merge_machine import es_insert
+from merge_machine.es_labeller import ConsoleLabeller
+from merge_machine.es_match import es_linker
 
 # =============================================================================
 # 1. USER CONFIG
@@ -23,10 +23,10 @@ from es_match import es_linker
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Path to the source (dirty) file
-source_file_path = 'local_test_data/source.csv'
+source_file_path = 'data_1/source.csv'
 
 # Path to the ref (reference / clean) file
-ref_file_path = 'local_test_data/ref.csv'
+ref_file_path = 'data_1/ref.csv'
 
 # The index name of the reference table in Elasticsearch (if not existant, 
 # it will be created)
@@ -73,9 +73,9 @@ source = source.where(source.notnull(), '')
 
 match_cols = [{'source': 'commune', 
                'ref': 'localite_acheminement_uai'},
-              {'source': 'lycees_sources', 
+              {'source': 'Lycées sources', 
                'ref': ('denomination_principale_uai', 'patronyme_uai')},
-              {'source': 'departement', 
+              {'source': 'département', 
                'ref': 'departement'}]    
 
 
@@ -192,7 +192,7 @@ print('Expected score:', best_query.score)
 # and use es_linker on each separate chunk
 # -----------------------------------------------------------------------------
 
-(new_source, _) = es_linker(source, labeller.export_best_params())
+(new_source, _) = es_linker(es, source, labeller.export_best_params())
 
 # =============================================================================
 # 7. Display top results of link
