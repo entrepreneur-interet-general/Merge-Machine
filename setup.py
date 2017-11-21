@@ -7,6 +7,15 @@ Created on Tue Nov  7 13:16:56 2017
 """
 
 from distutils.core import setup
+
+from sys import version_info
+
+class NotSupportedException(BaseException): pass
+
+if version_info.major < 3:
+    raise NotSupportedException("Only Python 3.x Supported")  
+
+
 setup(
   name = 'merge_machine',
   packages = ['merge_machine'], # this must be the same as the name above
