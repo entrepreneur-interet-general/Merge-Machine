@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Aug 18 16:44:41 2017
 
-@author: leo
-"""
 import json
 
 from elasticsearch import Elasticsearch, client
