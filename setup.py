@@ -16,7 +16,8 @@ setup(
   author = 'EIG 2017',
   author_email = 'leo.bou@gmail.com',
   url = 'https://github.com/eig-2017/Merge-Machine', # use the URL to the github repo
-  # download_url = 'https://github.com/peterldowns/mypackage/archive/0.1.tar.gz', # I'll explain this in a second
-  # keywords = ['testing', 'logging', 'example'], # arbitrary keywords
+  download_url = 'https://github.com/eig-2017/Merge-Machine/archive/0.1.tar.gz',
+  keywords = ['csv', 'link', 'merge', 'elasticsearch'],
   classifiers = [],
+  python_requires='>=3',
 )

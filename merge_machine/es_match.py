@@ -121,9 +121,7 @@ def es_linker(es, source, params):
     assert len(exact_matches_in_ref) + len(matches_in_ref) == len(source)
     new_source = pd.concat([source, pd.concat([matches_in_ref, exact_matches_in_ref])], 1)        
     
-    modified = new_source.copy() # TODO: is this good?
-    modified.loc[:, :] = True
-    return new_source, modified
+    return new_source
 
 
     

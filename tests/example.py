@@ -119,8 +119,7 @@ ic = client.IndicesClient(es)
 # 2. Index the referential
 # =============================================================================
 
-    
-force_re_index = True
+force_re_index = False
 if force_re_index or (not ic.exists(ref_table_name)):
     if ic.exists(ref_table_name):
         ic.delete(ref_table_name)
@@ -188,7 +187,7 @@ print('Expected score:', best_query.score)
 # and use es_linker on each separate chunk
 # -----------------------------------------------------------------------------
 
-(new_source, _) = es_linker(es, source, labeller.export_best_params())
+new_source = es_linker(es, source, labeller.export_best_params())
 
 # =============================================================================
 # 7. Display top results of link
