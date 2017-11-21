@@ -18,9 +18,7 @@ This library relies on Elasticsearch. We recommend using the last version availa
 ```
 # TODO: change to real name
 pip3 install -e .
-
 ```
-
 
 #### Docker install
 
@@ -38,58 +36,11 @@ Not yet... Sorry :(
 
 ### How to use in python3 ? 
 
-```
-import os
-
-import pandas as pd
-
-import magical_merge_machine as mmm
-
-# Choose the files that will be matched
-source_file_path = 'test/test_1/source.csv' # Dirty file
-ref_file_path = 'test/test_1/ref.csv' # Reference file
-
-
-
-# Indicate what columns should be used for matching
-match_cols = {
-	
-				... Fill here
-			}
-
-# Index the reference file in Elasticsearch
-ref_index_name = 'index_for_ref' # NB: indexes can be re-used across projects
-columns_to_index = mmm.gen_columns_to_index(match_cols)
-mmm.create_index()
-
-# (OPTIONAL) Labelling: learn the optimal query_template
-labeller = ConsoleLabeller(source, 
-					ref_index_name, 
-                 	match_cols, 
-                 	columns_to_index, 
-                 	certain_column_matches=None, 
-                 	must={}, 
-                 	must_not={})  
-
-## Label pairs (y(es)/n(o)/(p)revious/(q)uit)
-labeller.console_labeller()
-params = labeller.export_best_params()
-   
-
-# If no labelling, define parameters
-## params = ...
-
-# Perform linking
-new_source = es_linker(source, params)
-
-# Write to file
-new_source.to_csv('results.csv')
-```
-
-NB: In this example, the entire source is loaded in memory before matching. For large files, we suggest using pandas "chunksize" option to read the file by blocks
-
+See an example in `tests/example.py`.
 
 ## How to contribute ?
+
+Feel free to report bugs via Issues and make pull requests...
 
 
 ## Credits
