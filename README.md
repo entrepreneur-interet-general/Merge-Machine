@@ -20,11 +20,6 @@ This library relies on Elasticsearch. We recommend using the last version availa
 pip3 install -e .
 ```
 
-#### Docker install
-
-Not yet... Sorry :(
-
-
 ## How to use ?
 
 ### Concepts
@@ -36,7 +31,11 @@ Not yet... Sorry :(
 
 ### How to use in python3 ? 
 
-See an example in `tests/example.py`.
+See an example in [tests/example.py](https://github.com/eig-2017/Merge-Machine/blob/master/tests/example.py).
+
+## How it works ?
+
+The reference is indexed in Elasticsearch with multiple indexes (languages specific, integers, n\_grams...). The labeller then proposes training samples from the source which it tries to match to rows of the reference file. Upon user confirmation (match / not match) it updates its belief on which Elasticsearch queries are most performant to use for matching. When labelling is over, the "best query" (a weighted combination of multiple ES queries with different analyzers on different fields) is used for each row of the source to try to find a match in the ES-indexed referential.
 
 ## How to contribute ?
 
@@ -50,8 +49,8 @@ This library was developped during 10 months in 2017 at the French [Ministry of 
 ## See also
 
 This library was developped as a component of larger matching service:
-* service url
-* github url
+* ONLINE SERVICE COMING SOON !!!
+* [code](https://github.com/eig-2017/the-magical-csv-merge-machine)
 
 Other similar libraries include:
 * [match_id](https://github.com/matchID-project) (Identity record linking)
