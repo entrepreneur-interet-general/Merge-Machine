@@ -16,7 +16,6 @@ This library relies on Elasticsearch. We recommend using the last version availa
 #### PIP3 install 
 
 ```
-# TODO: change to real name
 pip3 install merge_machine
 ```
 
