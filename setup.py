@@ -8,8 +8,8 @@ Created on Tue Nov  7 13:16:56 2017
 
 from distutils.core import setup
 setup(
-  name = 'magical_merge_machine',
-  packages = ['magical_merge_machine'], # this must be the same as the name above
+  name = 'merge_machine',
+  packages = ['merge_machine'], # this must be the same as the name above
   version = '0.1',
   description = 'A library for extreme fuzzy tabular data matching that relies on Elasticsearch',
   author = 'EIG 2017',
