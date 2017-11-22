@@ -16,7 +16,9 @@ This library relies on Elasticsearch. We recommend using the last version availa
 #### PIP3 install 
 
 ```
-pip3 install merge_machine
+git clone https://github.com/eig-2017/Merge-Machine
+cd Merge-Machine
+pip3 install -e .
 ```
 
 ## How to use ?
