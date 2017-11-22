@@ -36,12 +36,11 @@ See an example in [tests/example.py](https://github.com/eig-2017/Merge-Machine/b
 
 ## How it works ?
 
-The reference is indexed in Elasticsearch with multiple indexes (languages specific, integers, n\_grams...). The labeller then proposes training samples from the source which it tries to match to rows of the reference file. Upon user confirmation (match / not match) it updates its belief on which Elasticsearch queries are most performant to use for matching. When labelling is over, the "best query" (a weighted combination of multiple ES queries with different analyzers on different fields) is used for each row of the source to try to find a match in the ES-indexed referential.
+The reference is indexed in Elasticsearch with multiple analyzers (languages specific, integers, n\_grams...). The labeller then proposes training samples from the source which it tries to match to rows of the reference file. Upon user confirmation (match / not match) it updates its belief on which Elasticsearch queries are most performant to use for matching. When labelling is over, the "best query" (a weighted combination of multiple ES queries with different analyzers on different fields) is used for each row of the source to try to find a match in the ES-indexed referential.
 
 ## How to contribute ?
 
-Feel free to report bugs via Issues and make pull requests...
-
+Feel free to report bugs via issues and make pull requests...
 
 ## Credits
 
