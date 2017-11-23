@@ -4,6 +4,8 @@
 Created on Mon Aug 28 19:27:30 2017
 
 @author: m75380
+
+Custom analyzers for Elasticsearch
 """
 import copy
 import os
@@ -14,12 +16,13 @@ import os
 #city_keep_file_path = os.path.join(curdir, 'resource', 'es_linker', 'es_city_keep.txt')
 #city_syn_file_path = os.path.join(curdir, 'resource', 'es_linker', 'es_city_synonyms.txt')
 
+elasticsearch_resource_dir = '/etc/elasticsearch'
+
 organization_keep_file_path = 'es_organization_keep.txt'
 organization_syn_file_path = 'es_organization_synonyms.txt'
 
 city_keep_file_path = 'es_city_keep.txt'
 city_syn_file_path = 'es_city_synonyms.txt'
-
 
 tokenizers = {
     "integers": {
@@ -28,6 +31,7 @@ tokenizers = {
         "pattern": '(\\d+)',
         'group': 1
     },
+            
     "char_n_grams": {
         "type": "ngram",
         "min_gram": 3,
@@ -53,8 +57,6 @@ filters = {
         "type" : "length",
         "min": 4
     },
-            
-            
     "leading_zero_trim": {
         "type": "pattern_replace",
         "pattern": "^0+(.*)",
@@ -196,6 +198,7 @@ def _gen_index_settings(index_settings_template, columns_to_index):
     NB: the default analyzer is keyword
     
     INPUT:
+        - index_settings_template
         - columns_to_index. For:
             {
             "nom_lycee": {
@@ -236,4 +239,23 @@ def _gen_index_settings(index_settings_template, columns_to_index):
     
     return index_settings
 
+# Create
 gen_index_settings = lambda columns_to_index: _gen_index_settings(index_settings_template, columns_to_index)
+
+#
+#sample_index_settings = gen_index_settings({'nom_lycee': {'city'}})
+#
+#{
+#    "settings" : {
+#        "number_of_shards" : 1
+#    },
+#    "mappings" : {
+#        "type1" : {
+#            "properties" : {
+#                "field1" : { "type" : "text" }
+#            }
+#        }
+#    }
+#}
+
+

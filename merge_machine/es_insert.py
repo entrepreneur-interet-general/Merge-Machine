@@ -38,6 +38,8 @@ def index(es, ref_gen, table_name, testing=False, file_len=0):
         - (file_len): original file len to display estimated time
     '''
     
+    ic = client.IndicesClient(es)
+    
     # For efficiency, reset refresh interval
     # see https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-update-settings.html
     if not testing:
