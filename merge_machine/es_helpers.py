@@ -25,8 +25,6 @@ def re_duplicate(tab, smaller_tab, columns, indexes):
     '''
     raise NotImplementedError
     return original_tab
-    
-    
 
 def my_unidecode(string):
     '''unidecode or return empty string'''

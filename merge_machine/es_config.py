@@ -209,6 +209,8 @@ def _gen_index_settings(index_settings_template, columns_to_index):
                     },
             "ID": {}
             }
+            
+    #TODO: test if some analyzers exist
     '''
     index_settings = copy.deepcopy(index_settings_template)
     
