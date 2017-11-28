@@ -85,7 +85,8 @@ match_cols = [{'source': 'commune',
 # The keys of this dictionnary are columns of the reference table. The values
 # are elasticsearch analyzers that will be used to compare values being matched
 # with these columns. Leaving an empty set will use the default case-indeferent
-# keyword analyser
+# keyword analyser. All columns mentioned in columns_to_index will be referenced
+# with the default analyzer.
 # 
 # NB: all the columns used in match_cols for the reference table must be
 # included in columns_to_index
@@ -119,21 +120,16 @@ ic = client.IndicesClient(es)
 # 2. Index the referential
 # =============================================================================
 
-force_re_index = False
-if force_re_index or (not ic.exists(ref_table_name)):
-    if ic.exists(ref_table_name):
-        ic.delete(ref_table_name)
-    
-    ref_gen = pd.read_csv(ref_file_path, 
-              usecols=columns_to_index.keys(),
-              dtype=str, chunksize=40000)
-    
-    index_settings = es_insert.gen_index_settings(columns_to_index)
-    
-    ic.create(ref_table_name, body=json.dumps(index_settings))    
-    
-    es_insert.index(es, ref_gen, ref_table_name, testing=True)
+force_re_index = True # Usually set to false
 
+# Create the index
+es_insert.create_index(es, ref_table_name, columns_to_index, force_re_index)
+
+# Insert documents in the index
+ref_gen = pd.read_csv(ref_file_path, 
+          usecols=columns_to_index.keys(),
+          dtype=str, chunksize=40000)
+es_insert.index(es, ref_gen, ref_table_name, testing=True)
     
 # =============================================================================
 # 3. Initiate the labeller

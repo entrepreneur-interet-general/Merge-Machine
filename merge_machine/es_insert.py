@@ -7,7 +7,6 @@ Created on Tue Aug 29 13:15:15 2017
 
 Deals with inserting a table in Elasticsearch
 
-TODO: look into missing document
 """
 
 import json
@@ -25,6 +24,41 @@ def pre_process_tab(tab):
     for x in tab.columns:
         tab.loc[:, x] = tab[x].str.strip()
     return tab
+
+
+
+def create_index(es, table_name, columns_to_index, force=False):
+    '''
+    Create a new empty Elasticsearch index (used to host documents)
+    
+    INPUT:
+        - es: an Elasticsearch connection
+        - table_name: name of the index in Elasticsearch
+        - columns_to_index: dict containing the columns to index and as values
+            the analyzers to use in addition to the default analyzer
+            
+            Ex: {'col1': {'analyzerA', 'analyzerB'}, 
+                 'col2': {}, 
+                 'col3': 'analyzerB'}
+        - force: whether or not to delete and re-create an index if the name 
+                is already associated to an existing index
+    
+    '''
+    
+    ic = client.IndicesClient(es)
+    
+    if ic.exists(table_name) and force:
+        ic.delete(table_name)
+    
+    if not ic.exists(table_name):
+        index_settings = gen_index_settings(columns_to_index)
+        try:
+            ic.create(table_name, body=json.dumps(index_settings))  
+        except Exception as e:
+            new_message = e.__str__() + '\n\n(MERGE MACHINE)--> This may be due to ' \
+                            'ES resource not being available. ' \
+                            'Run es_gen_resource.py (in sudo) for this to work'
+            raise Exception(new_message)
 
 
 def index(es, ref_gen, table_name, testing=False, file_len=0):
@@ -78,7 +112,10 @@ def index(es, ref_gen, table_name, testing=False, file_len=0):
         ic.put_settings(default_refresh, table_name)        
         es.indices.refresh(index=table_name)
 
+
+
 if __name__ == '__main__':
+    
     columns_to_index = {
         'SIEGE': {},
         'SIRET': {},
@@ -123,7 +160,7 @@ if __name__ == '__main__':
     # Index in Elasticsearch 
     #==============================================================================
     testing = False
-    new_index = True
+    force = True
     do_indexing = True
     chunksize = 2000
     
@@ -152,17 +189,7 @@ if __name__ == '__main__':
     
     # https://www.elastic.co/guide/en/elasticsearch/reference/1.4/analysis-edgengram-tokenizer.html
 
-    if new_index:
-        ic = client.IndicesClient(es)
-        if ic.exists(table_name):
-            ic.delete(table_name)
-        index_settings = gen_index_settings(columns_to_index)
-        try:
-            ic.create(table_name, body=json.dumps(index_settings))  
-        except Exception as e:
-            new_message = e.__str__() + '\n\n--> ES resource is not available. ' \
-                            'Run es_gen_resource.py (in sudo) for this to work'
-            raise Exception(new_message)
-    
+    create_index(es, table_name, columns_to_index, force)
+
     if do_indexing:
         index(ref_gen, table_name, testing)
