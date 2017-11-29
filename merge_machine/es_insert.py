@@ -51,7 +51,7 @@ def create_index(es, table_name, columns_to_index, force=False):
         ic.delete(table_name)
     
     if not ic.exists(table_name):
-        index_settings = gen_index_settings(columns_to_index)
+        index_settings = gen_index_settings('case_insensitive_keyword', columns_to_index)
         try:
             ic.create(table_name, body=json.dumps(index_settings))  
         except Exception as e:
