@@ -4,8 +4,11 @@
 Created on Fri Oct  6 00:38:16 2017
 
 @author: leo
-"""
 
+Various helping functions used in the code
+
+"""
+import copy
 import itertools
 import json
 
@@ -213,3 +216,91 @@ def _bulk_search(es, index_name, all_query_templates, rows, must_filters, must_n
         
 
     return og_search_templates, full_responses
+
+
+def _gen_index_settings_from_analyzers(analyzers):
+    '''
+    Takes our own custom analyzer definitions and turns them into appropriate
+    input for Elasticsearch settings.
+    '''
+    index_settings_template = {
+        "settings": {
+            "analysis": {
+                "tokenizer": {},
+                "filter": {},
+                "analyzer": {}
+            }
+        }
+    }
+    
+    for analyzer in analyzers:
+        for key in ['tokenizer', 'filter', 'analyzer']:
+            # TODO: check that keys are not overwritten
+            index_settings_template['settings']['analysis'][key].update(analyzer.get(key, {}))
+    return index_settings_template
+
+ 
+def gen_index_settings(default_analyzer, columns_to_index, analyzer_index_settings=None):
+    '''
+    Generate the dictionnary with ES syntax to pass for index creation.
+    
+    INPUT:
+        - default_analyzer: the analyzer that will be used on all fields mentioned
+            in columns_to_index no matter what
+        - columns_to_index: the analyzers to use for each column
+        - analyzer_index_settings: (optional) Elasticsearch settings if to define custom 
+                    analyzers if any are used. See Elasticsearch documentation 
+                    on how to create custom analyzers
+    '''
+    # 
+    if analyzer_index_settings is not None:
+        index_settings = copy.deepcopy(analyzer_index_settings)
+    else:
+        index_settings = dict()
+    
+    # Define mappings
+    field_mappings = {
+        key: {
+            'analyzer': default_analyzer,
+            'type': 'string',
+            'fields': {
+                analyzer: {
+                    'type': 'string',
+                    'analyzer': analyzer
+                }
+                for analyzer in values
+            }
+        }
+        for key, values in columns_to_index.items() if values
+    }
+                
+    field_mappings.update({
+        key: {
+            'analyzer': default_analyzer,
+            'type': 'string'
+        }
+        for key, values in columns_to_index.items() if not values
+    })
+                
+    assert 'mappings' not in index_settings
+    index_settings['mappings'] = {'structure': {'properties': field_mappings}}
+    
+    return index_settings    
+
+
+def _key_val_er(dict_):
+    '''To solve problem with keys having to be strings in json'''
+    return [{'__KEY__': key, '__VAL__': value} for key, value in dict_.items()]
+
+def _un_key_val_er(list_):
+    def _list_to_tuple(x):
+        if isinstance(x, list):
+            return tuple(x)
+        else:
+            return x
+    
+    try:
+        return {_list_to_tuple(dict_['__KEY__']): dict_['__VAL__'] for dict_ in list_}
+    except:
+        import pdb; pdb.set_trace()
+    

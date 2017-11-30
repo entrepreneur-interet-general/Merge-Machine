@@ -24,7 +24,7 @@ Problem with precision when no match found during labelling
 import numpy as np
 import pandas as pd
 
-from .es_helpers import _bulk_search
+from .helpers import _bulk_search
 
 
 def es_linker(es, source, params):
