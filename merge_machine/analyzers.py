@@ -6,13 +6,13 @@ Created on Wed Nov 29 14:59:43 2017
 @author: m75380
 
 Custom analyzers for Elasticsearch. No external resource required.
-
 """
 
 # =============================================================================
 # CASE INSENSITIVE KEYWORD ANALYZER
 # The analyzer looks for exact match versions in the lowercased text
 # =============================================================================
+
 case_insensitive_keyword = {
      'analyzer': {
             "case_insensitive_keyword": {

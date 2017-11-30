@@ -17,7 +17,7 @@ import time
 from elasticsearch import Elasticsearch, client
 import pandas as pd
 
-from .es_config import gen_index_settings
+from .helpers import gen_index_settings
 
 def pre_process_tab(tab):
     ''' Clean tab before insertion '''
@@ -26,8 +26,7 @@ def pre_process_tab(tab):
     return tab
 
 
-
-def create_index(es, table_name, columns_to_index, force=False):
+def create_index(es, table_name, columns_to_index, default_analyzer='keyword', analyzer_index_settings=None, force=False):
     '''
     Create a new empty Elasticsearch index (used to host documents)
     
@@ -51,7 +50,7 @@ def create_index(es, table_name, columns_to_index, force=False):
         ic.delete(table_name)
     
     if not ic.exists(table_name):
-        index_settings = gen_index_settings('case_insensitive_keyword', columns_to_index)
+        index_settings = gen_index_settings(default_analyzer, columns_to_index, analyzer_index_settings)
         try:
             ic.create(table_name, body=json.dumps(index_settings))  
         except Exception as e:
