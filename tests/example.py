@@ -10,6 +10,8 @@ from merge_machine import es_insert
 from merge_machine.es_labeller import ConsoleLabeller
 from merge_machine.es_match import es_linker
 
+from merge_machine.es_config import default_analyzer, index_settings_template
+
 # =============================================================================
 # 1. USER CONFIG
 # =============================================================================
@@ -123,7 +125,10 @@ ic = client.IndicesClient(es)
 force_re_index = True # Usually set to false
 
 # Create the index
-es_insert.create_index(es, ref_table_name, columns_to_index, force_re_index)
+es_insert.create_index(es, ref_table_name, columns_to_index, 
+                       default_analyzer=default_analyzer, 
+                       analyzer_index_settings=index_settings_template, 
+                       force=force_re_index)
 
 # Insert documents in the index
 ref_gen = pd.read_csv(ref_file_path, 
