@@ -808,7 +808,7 @@ class Labeller():
            
         self.match_cols = match_cols    
         self.certain_column_matches = certain_column_matches
-        self.columns_to_index = columns_to_index
+        self.columns_to_index = {key: set(values) for key, values in columns_to_index.items()}
         
         self.es = es
         
