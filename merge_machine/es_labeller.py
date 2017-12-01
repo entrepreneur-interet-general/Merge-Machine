@@ -804,7 +804,9 @@ class Labeller():
                     return y
             return {'source': _unlist(x['source']), 'ref': _unlist(x['ref'])}
             
-        self.match_cols = [_unlist_match(match) for match in match_cols]      
+        match_cols = [_unlist_match(match) for match in match_cols]
+           
+        self.match_cols = match_cols    
         self.certain_column_matches = certain_column_matches
         self.columns_to_index = columns_to_index
         
