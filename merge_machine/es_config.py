@@ -14,27 +14,11 @@ from .helpers import _gen_index_settings_from_analyzers
 from .analyzers import case_insensitive_keyword, integers, n_grams
 from .analyzers_resource import city
 
-# Default analyzer
-default_analyzer = 'case_insensitive_keyword'
+# Default analyzer (for non-matching columns)
+DEFAULT_ANALYZER = 'case_insensitive_keyword'
+
+# Default analyzers (for columns that should match)
+DEFAULT_ANALYZERS = {'case_insensitive_keyword', 'city', 'integers', 'n_grams'}
 
 # Create ES config template for custom analyzers
-analyzers = [case_insensitive_keyword, city, integers, n_grams]
-index_settings_template = _gen_index_settings_from_analyzers(analyzers)
-
-
-#sample_index_settings = gen_index_settings({'nom_lycee': {'city'}})
-#
-#{
-#    "settings" : {
-#        "number_of_shards" : 1
-#    },
-#    "mappings" : {
-#        "type1" : {
-#            "properties" : {
-#                "field1" : { "type" : "text" }
-#            }
-#        }
-#    }
-#}
-
-
+INDEX_SETTINGS_TEMPLATE = _gen_index_settings_from_analyzers([eval(x) for x in DEFAULT_ANALYZERS]) # TODO: change this
