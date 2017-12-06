@@ -222,6 +222,9 @@ def _gen_index_settings_from_analyzers(analyzers):
     '''
     Takes our own custom analyzer definitions and turns them into appropriate
     input for Elasticsearch settings.
+    
+    INPUT:
+        analyzers: list or set of our custom definition of analyzers    
     '''
     index_settings_template = {
         "settings": {

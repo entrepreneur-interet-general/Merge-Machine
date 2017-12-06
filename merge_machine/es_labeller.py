@@ -268,11 +268,7 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
                 == len(self.first_scores) \
                 == len(self.has_results)
                 
-        try:
-            assert len(self.first_is_match) == len(self.any_is_match)
-        except:
-            import pdb;
-            pdb.set_trace()
+        assert len(self.first_is_match) == len(self.any_is_match)
 
     def reset(self):
         self.history_pairs = {} # {source_id: [(), (), ]}
@@ -759,13 +755,11 @@ class Labeller():
         source_cols_for_match = set()
     
         for match in match_cols:
-            try:
-                if isinstance(match['source'], str):
-                    source_cols_for_match.add(match['source'])
-                else:
-                    source_cols_for_match.update(match['source'])
-            except:
-                import pdb; pdb.set_trace()
+            if isinstance(match['source'], str):
+                source_cols_for_match.add(match['source'])
+            else:
+                source_cols_for_match.update(match['source'])
+
         source_cols_for_match = list(source_cols_for_match)       
         
         smaller_source = source.drop_duplicates(subset=source_cols_for_match)
@@ -955,12 +949,10 @@ class Labeller():
                 w.write(encoder.encode(dict_))
         except:
             for key in dict_.keys():
-                try:
-                    print('trying key:', key)
-                    with open(file_path, 'w') as w:
-                        w.write(encoder.encode(dict_[key]))         
-                except:
-                    import pdb; pdb.set_trace()
+                print('trying key:', key)
+                with open(file_path, 'w') as w:
+                    w.write(encoder.encode(dict_[key]))         
+
     
     @classmethod
     def from_json(cls, file_path, es, source, ref_index_name):
@@ -1059,59 +1051,82 @@ class Labeller():
                             self.current_source_item, self.NUM_RESULTS)
             self.add_results(results)   
 
-    def add_search_to_ref_gen(self, col_to_search, max_num_results):
+    def add_custom_search(self, col_to_search, max_num_results):
         '''
-        Add results of query in body in front of ref_gen
+        Search for the items in col_to_search (in the corresponding columns) 
+        and add results of the query in the body in front of ref_gen.
         
         INPUT:
             - col_to_search: dict indicating what strings to search for in 
                             which columns
         
+        NB: this can be used by the user at the start of labelling to help 
+        orient the labeller towards better matches        
         '''
         DEFAULT_SEARCH_ANALYZER = '.french'
         query_template = [('must', key, key, DEFAULT_SEARCH_ANALYZER, 1) for key in col_to_search]
-        body = _gen_body(query_template, col_to_search) # TODO: add global filters ?
+        body = _gen_body(query_template, col_to_search, num_results=max_num_results) # TODO: add global filters ?
         
         print(body)
         # Remove previous results of search
-        self.remove_search_from_ref_gen()
+        self.clear_custom_search()
         
-        res = self.es.search(self.ref_index_name, body)['hits']['hits']
+        res = self.es.search(self.ref_index_name, body=body)['hits']['hits']
+        
         print(res)
         print('Len res:', len(res))
         
-        def temp():
-            for x in res:
-                # Use this for user_filtered queries
-                self.current_query_ranking = -1
-                self.current_query = None
+        if res:
+            def temp(og_elem, og_ranking, og_query):
+                for x in res:
+                    # Use this for user_filtered queries
+                    self.current_query_ranking = -1
+                    self.current_query = None
+                    
+                    if (self.current_source_idx, x['_id']) not in self.labelled_pairs:
+                        yield (x['_id'], x['_source'], x['_score'])
+                    
+                self.current_query_ranking = og_ranking
+                self.current_query = og_query
                 
-                yield (x['_id'], x['_item'], x['_source'])
-        self.ref_gen = itertools.chain(temp(), self.ref_gen)
-    
-    def remove_search_from_ref_gen(self):
+                yield og_elem
+                
+            og_elem = (self.current_ref_idx, self.current_ref_item, self.current_es_score)   
+            og_ranking = self.current_query_ranking
+            og_query = self.current_query
+            
+            self.ref_gen = itertools.chain(temp(og_elem, og_ranking, og_query), 
+                                           self.ref_gen)
+            
+            # Change current proposal
+            (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
+        
+    def clear_custom_search(self):
         '''
         Remove the elements that were generated by a user search (identified
         by self.current_query_ranking == -1)
         '''
-        for _ in range(10**6): # Avoiding while True
-            try:
-                first_elem = next(self.ref_gen)
-            except StopIteration:
-                def temp():
-                    raise StopIteration
-                self.ref_gen = temp()
-                break
-                
-            if self.current_query_ranking != -1:
-                self.ref_gen = itertools.chain([first_elem], self.ref_gen)
-                break
+        if self.current_query_ranking == -1:
             
-        else:
-            raise RuntimeError('All elements of ref_gen have ' \
-                               'current_query_ranking at -1. This is wrong!')
+            for _ in range(10**6): # Avoiding while True
+                try:
+                    first_elem = next(self.ref_gen)
+                except StopIteration:
+                    def temp():
+                        raise StopIteration
+                    self.ref_gen = temp()
+                    break
+                    
+                if self.current_query_ranking != -1:
+                    self.ref_gen = itertools.chain([first_elem], self.ref_gen)
+                    break
+                
+            else:
+                raise RuntimeError('All elements of ref_gen have ' \
+                                   'current_query_ranking at -1. This is wrong!')
 
-         
+            # Change current proposal
+            (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
     
     def _init_ref_gen(self):
         '''Generator of results for the current source element'''
@@ -1553,6 +1568,7 @@ class Labeller():
         # The pair for which the user sent an answer
         pair = (self.current_source_idx, self.current_ref_idx)
         
+        assert pair not in self.labelled_pairs
         self.labelled_pairs.append(pair)
         self.labels[pair] = user_input
 
@@ -1874,6 +1890,7 @@ class Labeller():
     @_log_wrapper
     def filter_by_core(self):
         cores = [q.core for q in self.single_core_queries if q.score <= 0.2]
+
         self.current_queries = list({query.new_template_restricted(cores, ['must']) \
                                             for query in self.current_queries})
         self.current_queries = [x for x in self.current_queries if x is not None]
@@ -2017,13 +2034,14 @@ class Labeller():
         
         # Info on current query
         # TODO: on  previous, current_query is no longer valid
-        current_query = self.current_query
-        dict_to_emit['query'] = current_query._as_tuple()
         dict_to_emit['query_ranking'] = self.current_query_ranking
-        dict_to_emit['estimated_precision'] = current_query.precision # TODO: 
-        dict_to_emit['estimated_recall'] = current_query.recall # TODO: 
-        dict_to_emit['estimated_score'] = current_query.score # TODO:   
-        dict_to_emit['thresh'] = current_query.thresh        
+        if self.current_query_ranking != -1:
+            current_query = self.current_query
+            dict_to_emit['query'] = current_query._as_tuple()
+            dict_to_emit['estimated_precision'] = current_query.precision # TODO: 
+            dict_to_emit['estimated_recall'] = current_query.recall # TODO: 
+            dict_to_emit['estimated_score'] = current_query.score # TODO:   
+            dict_to_emit['thresh'] = current_query.thresh        
 
         # Info on pair
         dict_to_emit['source_idx'] = self.current_source_idx
@@ -2046,14 +2064,14 @@ class Labeller():
         
         # Estimate if the current pair is considered to be a match or not
         # (only if we have access to es_score and current query threshold)
-        if (self.current_es_score is not None) and (current_query.thresh is not None):
-            dict_to_emit['estimated_is_match'] = self.current_es_score >= current_query.thresh
-        else:
-            dict_to_emit['estimated_is_match'] = None
+        if self.current_query_ranking != -1:
+            if (self.current_es_score is not None) and (current_query.thresh is not None):
+                dict_to_emit['estimated_is_match'] = self.current_es_score >= current_query.thresh
+            else:
+                dict_to_emit['estimated_is_match'] = None
         
         return dict_to_emit
     
-
 
         
     
@@ -2111,6 +2129,7 @@ class ConsoleLabeller(Labeller):
         elif user_input in ['h', 'help']:  
             print(self.HELP)
             self.display_instructions()
+        
         else:
             if user_input[0] == '=':
                 self.change_tab(user_input)
@@ -2192,15 +2211,17 @@ class ConsoleLabeller(Labeller):
         '''Print current state of labeller and the active pair to label'''
         dict_to_emit = self.to_emit()
     
-        print('({0}): {1}'.format(dict_to_emit['query_ranking'], dict_to_emit['query']))
-        print('Precision: {0}; Recall: {1}; Score: {2}'.format(
-                                          dict_to_emit['estimated_precision'],
-                                          dict_to_emit['estimated_recall'],
-                                          dict_to_emit['estimated_score']))
+        if dict_to_emit['query_ranking'] != -1:
     
-        print('ES score: {0}; Thresh: {1}; Is match: {2}'.format(dict_to_emit['es_score'],
-                  dict_to_emit['thresh'], dict_to_emit['estimated_is_match']))
-        print('Majority_vote:', dict_to_emit['majority_vote'])
+            print('({0}): {1}'.format(dict_to_emit['query_ranking'], dict_to_emit['query']))
+            print('Precision: {0}; Recall: {1}; Score: {2}'.format(
+                                              dict_to_emit['estimated_precision'],
+                                              dict_to_emit['estimated_recall'],
+                                              dict_to_emit['estimated_score']))
+        
+            print('ES score: {0}; Thresh: {1}; Is match: {2}'.format(dict_to_emit['es_score'],
+                      dict_to_emit['thresh'], dict_to_emit['estimated_is_match']))
+            print('Majority_vote:', dict_to_emit['majority_vote'])
     
     
         print('\n(S): {0}'.format(dict_to_emit['source_idx']))
