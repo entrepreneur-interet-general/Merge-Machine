@@ -10,7 +10,7 @@ from merge_machine import es_insert
 from merge_machine.es_labeller import ConsoleLabeller
 from merge_machine.es_match import es_linker
 
-from merge_machine.es_config import default_analyzer, index_settings_template
+from merge_machine.es_config import DEFAULT_ANALYZER, INDEX_SETTINGS_TEMPLATE
 
 # =============================================================================
 # 1. USER CONFIG
@@ -126,8 +126,8 @@ force_re_index = True # Usually set to false
 
 # Create the index
 es_insert.create_index(es, ref_table_name, columns_to_index, 
-                       default_analyzer=default_analyzer, 
-                       analyzer_index_settings=index_settings_template, 
+                       default_analyzer=DEFAULT_ANALYZER, 
+                       analyzer_index_settings=INDEX_SETTINGS_TEMPLATE, 
                        force=force_re_index)
 
 # Insert documents in the index
