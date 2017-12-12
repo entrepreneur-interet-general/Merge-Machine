@@ -13,8 +13,13 @@ A python3 library to link a dirty CSV file with a clean reference table. It is m
 
 This library relies on Elasticsearch. We recommend using the last version available. Instructions [here](https://www.elastic.co/guide/en/elasticsearch/reference/current/_installation.html).
 
-#### PIP3 install (pypi comming soon!)
+#### PIP3 install
 
+```
+pip3 install merge-machine
+```
+
+Or for the bleeding edge version:
 ```
 git clone https://github.com/eig-2017/Merge-Machine
 cd Merge-Machine
