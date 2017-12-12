@@ -840,6 +840,7 @@ class Labeller():
 
     def _sanity_check(self):
         '''Make sure you are not crazy. Run this after updates'''
+        # Labels
         if self.has_labels:
             assert len(self.labelled_pairs) \
                         == len(self.labels)
@@ -848,7 +849,10 @@ class Labeller():
                     == len(self.num_positive_rows_labelled)
 
         assert all(isinstance(x, tuple) for x in self.labelled_pairs)
-                
+        
+        # Queries
+        assert len(self.current_queries) == len(set(self.current_queries))
+        
         for query in self.current_queries:
             query._sanity_check()
             
@@ -1462,8 +1466,6 @@ class Labeller():
                     query.add_labelled_pair_items(self.es, self.ref_index_name, 
                                     self.current_source_item, self.current_ref_item)
         
-
-        
         # TODO: separate learn of auto label ?        
         # Re-train (learn queries)
         self._re_score_history(True, learn=True)
@@ -1944,8 +1946,8 @@ class Labeller():
         '''Add queries to current_queries by adding fields'''
         print('EXPANDING BY CORE')
         cores = [q for q in self.single_core_queries if q.score >= 0.7]
-        self.current_queries = [x for query in self.current_queries \
-                                for x in query.multiply_by_core(cores, ['must'])]
+        self.current_queries = list({x for query in self.current_queries \
+                                for x in query.multiply_by_core(cores, ['must'])})
 
         # TODO: Move back into expand
         self._re_score_history(call_next_row=False)
@@ -1958,8 +1960,8 @@ class Labeller():
     def expand_by_boost(self):
         '''Add queries to current_queries by varying boost levels'''
         print('EXPANDING BY BOOST')        
-        self.current_queries = [x for query in self.current_queries \
-                                for x in query.multiply_by_boost(2)]
+        self.current_queries = list({x for query in self.current_queries \
+                                for x in query.multiply_by_boost(2)})
 
         # TODO: Move back into expand
         self._re_score_history(call_next_row=False)
