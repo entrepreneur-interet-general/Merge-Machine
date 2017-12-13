@@ -1741,7 +1741,7 @@ class Labeller():
     def _query_counter_wrapper(func):
         '''
         Decorator to use around filter and expand to print the number of 
-        queries before and after transformations
+        queries before and after transformations.
         '''
         def wrapper(self, *args, **kwargs):
             l1 = len(self.current_queries)
@@ -1761,12 +1761,10 @@ class Labeller():
     
     def _log_wrapper(func):
         '''
-        Log changing occuring during filtering or expansion to self.log
-        
+        Decorator to use around filter and expand to record changes in self.log
         '''
     
         def wrapper(self, *args, **kwargs):
-            
             self._sort_queries()
             best_query = self.current_queries[0]
             log = dict()
@@ -1800,7 +1798,10 @@ class Labeller():
     @_query_counter_wrapper   
     @_log_wrapper
     def filter_by_extended_core(self):
-        '''Keep the best of each query template for all distinct extended_cores'''
+        '''
+        Keep the best of each query template for all distinct extended_cores.
+        (Keeping the best combination of boost_level s for each extended_core)
+        '''
         queries_by_extended_core = defaultdict(list)
         for query in self.current_queries:
             queries_by_extended_core[query.extended_core].append(query)
@@ -2006,7 +2007,6 @@ class Labeller():
     
     @print_name
     def update_targets(self, t_p, t_r):
-        ''''''
         self.TARGET_PRECISION = t_p
         self.TARGET_RECALL = t_r
 
@@ -2083,6 +2083,9 @@ class Labeller():
         
     
 class ConsoleLabeller(Labeller):
+    '''
+    Wrapper around the labeller class for convenient use in the console.    
+    '''
     
     TABS = ['menu', 'labeller', 'filter']
     
@@ -2107,9 +2110,9 @@ class ConsoleLabeller(Labeller):
     
     LABELLER_INSTRUCTIONS = 'Valid answers are: "y(es)"/"1", "n(o)"/"0", or "p(revious)" / or "q(uit)"'
     
-    GENERAL_INSTRUCTIONS = 'You can switch tabs by using the following inputs: ' \
-            '"=labeller", "=menu" or "=filter".\n You can quit by typing "quit"'
-    
+    GENERAL_INSTRUCTIONS = 'Switch tab by entering:\n' \
+            '"=labeller", "=menu" or "=filter".\n Quit labeller by typing: "quit"\n' \
+            'Help with: "help"'
     
     VALID_TAB_CHANGES = ['=l', '=labeller', '=f', '=filter', '=m', '=menu']
 
@@ -2175,7 +2178,6 @@ class ConsoleLabeller(Labeller):
         elif user_input.lower()[:2] == '=m':
             self.current_tab = 'menu'
     
-    
     def display(self):
         '''Show the appropriate display according to the current tab'''
         
@@ -2230,7 +2232,6 @@ class ConsoleLabeller(Labeller):
                       dict_to_emit['thresh'], dict_to_emit['estimated_is_match']))
             print('Majority_vote:', dict_to_emit['majority_vote'])
     
-    
         print('\n(S): {0}'.format(dict_to_emit['source_idx']))
         print('(R): {0}'.format(dict_to_emit['ref_idx']))
 
@@ -2272,7 +2273,6 @@ class ConsoleLabeller(Labeller):
     
         print(self.FILTER_INSTRUCTIONS)
         print(current_filters)
-
     
     def filter_user_input_is_valid(self, user_input):
         values = [x.strip() for x in user_input.split('/', 2)]
