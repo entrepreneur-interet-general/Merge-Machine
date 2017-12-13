@@ -10,28 +10,8 @@ Directions:
 
 Filter by core when should is almost never used
 
-TODO:
-
-- ref_gen
-- buffer_for_future_matches in same row when previous is called:
-    overwrite ref_gen
-- query_filter   
-
-
-for query in labeller.current_queries:
-    print('\n*******')
-    print(query._as_tuple())
-    print('precision:', query.precision)
-    print('recall', query.recall)
-    print('score', query.score)
-    print('thresh', query.thresh)
-
-
-TODO: check why precision is 1 even after no/yes
-
 TODO: try multiple training orders on data
-
-force diversity in cores
+TODO: force diversity in cores
 
 """
 from collections import defaultdict
@@ -710,6 +690,19 @@ class Labeller():
     >>> for x in range(100):
             to_display = labeller.to_emit()
             labeller.update('y')        
+            
+    IMPORTANT CONCEPTS:
+        
+    self.current_queries: a list of query templates (LabellerQueryTemplate) 
+            that is being evaluated to determin which is the best query template
+            to use for the current matching problem
+    self.single_core_queries: a list of single queries (CoreScorerQueryTemplate)
+            that is being evaluated to help filtering and generating pertinant
+            queries for self.current_queries
+    self.must_filters: positive filters on fields of the referential (to 
+            force results to include certain words in certain fields)
+    self.must_not_filters: negative filters on fields of the referential (
+            to NOT return results that include certain words)
     '''
     NUM_RESULTS = 3
     
@@ -734,10 +727,6 @@ class Labeller():
                  'previous': 'p',
                  'p': 'p'         
                  }
-
-    #min_precision_tab = [(20, 0.7), (10, 0.5), (5, 0.3)]
-    #max_num_keys_tab = [(20, 10), (10, 50), (7, 200), (5, 500), (0, 1000)]
-    #num_results_labelling = 3
     
     MAX_NUM_LEVELS = 3 # Number of match clauses
     BOOL_LEVELS = {'.integers': ['must', 'should'], 
@@ -745,8 +734,8 @@ class Labeller():
     BOOST_LEVELS = [1]
     
     # Target precision and target recall
-    t_p = 0.95
-    t_r = 0.3    
+    TARGET_PRECISION = 0.95
+    TARGET_RECALL = 0.3    
     
     @staticmethod
     def _dedupe_source(source, match_cols):
@@ -813,10 +802,8 @@ class Labeller():
         self.num_positive_rows_labelled = [] # Flat list: at given label, how_many were matches
         self.labelled_pairs_match = [] # For each row, the resulting match: (A, B) / no-match: (A, None) or forgotten: None
          
-        
         self.must_filters = must
         self.must_not_filters = must_not
-        
            
         self._init_queries(match_cols, columns_to_index) # creates self.current_queries
         self._init_core_queries(match_cols, columns_to_index) # creates self.single_core_queries
@@ -1285,7 +1272,7 @@ class Labeller():
         individual query
         '''
         for query in self.current_queries:
-            query.compute_metrics(self.t_p, self.t_r)
+            query.compute_metrics(self.TARGET_PRECISION, self.TARGET_RECALL)
     
     
     def majority_vote(self, max_num_voters, min_score=0):
@@ -1773,7 +1760,10 @@ class Labeller():
         return wrapper
     
     def _log_wrapper(func):
-        ''' '''
+        '''
+        Log changing occuring during filtering or expansion to self.log
+        
+        '''
     
         def wrapper(self, *args, **kwargs):
             
@@ -1820,7 +1810,7 @@ class Labeller():
         self._sort_queries()
         
     def filter_(self):
-        '''Apply query filtering'''
+        '''Apply filtering on current_queries'''
         
         FILTER_BY_CORE_IDXS = [10, 20]
         
@@ -1840,7 +1830,7 @@ class Labeller():
         
     def expand(self):
         '''
-        Use current state to determin whether or not to use queyr expansion and 
+        Use current state to determin whether or not to use query expansion and 
         which method to use.
         '''
         EXPAND_BY_CORE_IDXS = {11, 17}
@@ -1924,6 +1914,11 @@ class Labeller():
     @_query_counter_wrapper
     @_log_wrapper
     def filter_by_num_keys(self):
+        '''
+        Keep only the best N queries; N depends on the number of rows with
+        a match found (aka the number of positive labels).
+        '''
+        
         MAX_NUM_KEYS_TAB = [(20, 10), (10, 50), (7, 200), (5, 500), (0, 4000)]
         def _max_num_queries(self):
             '''
@@ -1943,9 +1938,10 @@ class Labeller():
     @_query_counter_wrapper
     @_log_wrapper
     def expand_by_core(self):
-        '''Add queries to current_queries by adding fields'''
+        '''Add queries to current_queries by adding fields to current_queries'''
         print('EXPANDING BY CORE')
-        cores = [q for q in self.single_core_queries if q.score >= 0.7]
+        MIN_SCORE = 0.7
+        cores = [q for q in self.single_core_queries if q.score >= MIN_SCORE]
         self.current_queries = list({x for query in self.current_queries \
                                 for x in query.multiply_by_core(cores, ['must'])})
 
@@ -1997,7 +1993,7 @@ class Labeller():
             w.write(encoder.encode(params))
     
     @print_name
-    def update_musts(self, must_filters, must_not_filters): # DONE
+    def update_musts(self, must_filters, must_not_filters):
         if (not isinstance(must_filters, dict)) or (not isinstance(must_not_filters, dict)):
             raise ValueError('Variables "must" and "must_not" should be dicts' \
                 'with keys being column names and values a list of strings')
@@ -2005,10 +2001,19 @@ class Labeller():
         self.must_not_filters = must_not_filters
         
         self._re_score_history(call_next_row=True)
-        
-        #        assert self.current_source_idx != self.labelled_pairs_match[-1][0]
+    
         self._sanity_check()
-        
+    
+    @print_name
+    def update_targets(self, t_p, t_r):
+        ''''''
+        self.TARGET_PRECISION = t_p
+        self.TARGET_RECALL = t_r
+
+        # Re-score metrics
+        self._compute_metrics()
+        self._sorta_sort_queries()
+        self._sort_queries()
         
     def _best_query_template(self):
         """Return query template with the best score (ratio)"""
@@ -2022,8 +2027,8 @@ class Labeller():
         dict_to_emit = dict()
 
         # Info on labeller
-        dict_to_emit['t_p'] = self.t_p
-        dict_to_emit['t_r'] = self.t_r
+        dict_to_emit['t_p'] = self.TARGET_PRECISION
+        dict_to_emit['t_r'] = self.TARGET_RECALL
         dict_to_emit['has_previous'] = bool(len(self.labels)) 
         dict_to_emit['must_filters'] = self.must_filters
         dict_to_emit['must_not_filters'] = self.must_not_filters
@@ -2280,6 +2285,7 @@ class ConsoleLabeller(Labeller):
         return False 
     
     def update_filter(self, user_input):
+        '''Change values for labeller filters'''
         
         values = [x.strip() for x in user_input.split('/', 2)]
         
