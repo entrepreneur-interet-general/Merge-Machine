@@ -127,7 +127,6 @@ class SingleQueryTemplate():
     def _as_tuple(self):
         return (self.bool_lvl, self.source_col, self.ref_col, self.analyzer_suffix, self.boost)
 
-
 class CompoundQueryTemplate():
     '''Information regarding a query to be used in the labeller'''
     def __init__(self, single_query_templates_tuple):        
@@ -247,7 +246,7 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
         assert len(self.history_pairs) \
                 == len(self.first_scores) \
                 == len(self.has_results)
-                
+        
         assert len(self.first_is_match) == len(self.any_is_match)
 
     def reset(self):
@@ -534,7 +533,6 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
             return None
 
 class CoreScorerQueryTemplate(SingleQueryTemplate):
-    '''Score'''
     
     def __init__(self, *argv, **kwargs):
         super().__init__(*argv, **kwargs)    
@@ -579,6 +577,33 @@ class CoreScorerQueryTemplate(SingleQueryTemplate):
         
         # Score is mean number of intersections
         self.score = sum(x > 0 for x in self.intersect_lens) / len(self.intersect_lens)
+        
+    def to_dict(self):
+        ''' '''
+        dict_ = super().to_dict()
+        
+        if hasattr(self, 'score'):
+            dict_['score'] = self.score    
+            
+        dict_['source_lens'] = self.source_lens
+        dict_['ref_lens'] = self.ref_lens
+        dict_['intersect_lens'] = self.intersect_lens
+    
+        return dict_
+    
+    
+    @classmethod
+    def from_dict(cls, dict_):
+        csqt = super(CoreScorerQueryTemplate, cls).from_dict(dict_)
+        
+        if 'score' in dict_:
+            csqt.score = dict_['score']
+            
+        csqt.source_lens = dict_['source_lens']
+        csqt.ref_lens = dict_['ref_lens']
+        csqt.intersect_lens = dict_['intersect_lens']
+        
+        return csqt
         
         
 def _gen_suffix(columns_to_index, s_q_t_2):
@@ -649,21 +674,6 @@ def _gen_all_query_template_tuples(match_cols, columns_to_index, bool_levels,
     all_query_templates = list(filter(lambda query: 'must' in [s_q_t[0] for s_q_t in query], \
                                 all_query_templates))
     return all_query_templates
-
-
-"""
-
-"""
-
-
-"""
-Initialise core queries (list)
-On match:
-    - Analyze source and ref Using the query analyzer
-    - Add number Of common tokens 
-"""
-
-
 
 
 
@@ -845,6 +855,9 @@ class Labeller():
             
         for query in self.single_core_queries:
             query._sanity_check()
+        
+
+
 
     def to_dict(self):
         ''' '''
@@ -928,7 +941,8 @@ class Labeller():
         labeller._sanity_check()
         
         labeller._init_source_gen()
-        labeller._init_ref_gen()
+        labeller._init_ref_gen() 
+
         return labeller
 
     def to_json(self, file_path):
@@ -944,7 +958,6 @@ class Labeller():
                 with open(file_path, 'w') as w:
                     w.write(encoder.encode(dict_[key]))         
 
-    
     @classmethod
     def from_json(cls, file_path, es, source, ref_index_name):
         with open(file_path) as f:
@@ -1012,7 +1025,7 @@ class Labeller():
                                                     columns_to_index, 
                                                     {}, # defaults to must
                                                     [1])
-            
+        print('Warning: initializing core scorer query templates')
         self.single_core_queries = [CoreScorerQueryTemplate(*q_t_t) for q_t_t \
                                     in all_single_query_templates_tuples]
 
@@ -1111,13 +1124,36 @@ class Labeller():
                 if self.current_query_ranking != -1:
                     self.ref_gen = itertools.chain([first_elem], self.ref_gen)
                     break
-                
             else:
                 raise RuntimeError('All elements of ref_gen have ' \
                                    'current_query_ranking at -1. This is wrong!')
 
             # Change current proposal
             (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
+    
+    def _is_exact_match(self, source_item, ref_item):
+        '''
+        Check if match is considered exact between two items on columns used
+        for matching
+        '''
+        
+        for match in self.match_cols:
+            s_col = match['source']
+            if isinstance(s_col, str):
+                s_col = [s_col]
+                
+            r_col = match['ref']
+            if isinstance(r_col, str):
+                r_col = [r_col]
+                
+            try:
+                s_string = ' '.join(source_item[col] for col in s_col)
+                
+                if not any(s_string == ref_item[col] for col in r_col):
+                    return False
+            except:
+                import pdb; pdb.set_trace()
+        return True
     
     def _init_ref_gen(self):
         '''Generator of results for the current source element'''
@@ -1150,6 +1186,7 @@ class Labeller():
                             else:
                                 item = self._fetch_ref_item(pair[1])
                                 es_score = 1.23456789
+                            
                             
                             yield pair[1], item, es_score
                         # TODO: check that source idx is same as in source_gen
@@ -1265,7 +1302,6 @@ class Labeller():
         print('Non empty results:', sum(bool(x) for x in to_return))
         return to_return
 
-
     def _compute_metrics(self):
         '''
         Compute metrics (threshold, precision, recall, score) for each 
@@ -1273,7 +1309,6 @@ class Labeller():
         '''
         for query in self.current_queries:
             query.compute_metrics(self.TARGET_PRECISION, self.TARGET_RECALL)
-    
     
     def majority_vote(self, max_num_voters, min_score=0):
         ''' #TODO: Document / implement min_score'''
@@ -1518,10 +1553,7 @@ class Labeller():
             self.num_positive_rows_labelled.append(self.num_positive_rows_labelled[-1] + int(last_is_match))
         else:
             self.num_rows_labelled = [int(at_new_row)]
-            self.num_positive_rows_labelled = [int(last_is_match)]            
-   
-    
-    
+            self.num_positive_rows_labelled = [int(last_is_match)]
     
     @print_name
     def update(self, user_input):
@@ -1540,7 +1572,8 @@ class Labeller():
         print(self.num_positive_rows_labelled)
         print(self.num_rows_labelled)
         
-        print('At pair {0} / {1} ; user input: {2}'.format(self.current_source_idx, self.current_ref_idx, user_input))
+        print('At pair {0} / {1} ; user input: {2}'.format(self.current_source_idx, 
+                                              self.current_ref_idx, user_input))
         
         # Interpret answers
         yes = self.VALID_ANSWERS[user_input] == 'y'
@@ -1658,12 +1691,10 @@ class Labeller():
         current_source_item = self.current_source_item
         current_ref_item = self.current_ref_item            
         
-        
         # self._init_queries(self.match_cols, self.columns_to_index)
         
         og_labelled_pairs_match = list(self.labelled_pairs_match)
     
-        
         # TODO: discrepancy between length of self.labels and self.num_rows_labelled
         # TODO: NRL doesn't increase once you have no results once
         
@@ -1717,7 +1748,6 @@ class Labeller():
         # if True: # TODO: use sort_queries
         self._sorta_sort_queries()
         self._sort_queries()
-
 
         # Go back to original state
         self.current_source_idx = current_source_idx
@@ -1882,7 +1912,11 @@ class Labeller():
     @_query_counter_wrapper    
     @_log_wrapper
     def filter_by_core(self):
-        cores = [q.core for q in self.single_core_queries if q.score <= 0.2]
+        MIN_SCORE = 0.2
+        try:
+            cores = [q.core for q in self.single_core_queries if q.score <= MIN_SCORE]
+        except:
+            import pdb; pdb.set_trace(  )
 
         self.current_queries = list({query.new_template_restricted(cores, ['must']) \
                                             for query in self.current_queries})
@@ -1942,7 +1976,10 @@ class Labeller():
         '''Add queries to current_queries by adding fields to current_queries'''
         print('EXPANDING BY CORE')
         MIN_SCORE = 0.7
-        cores = [q for q in self.single_core_queries if q.score >= MIN_SCORE]
+        try:
+            cores = [q for q in self.single_core_queries if q.score >= MIN_SCORE]
+        except:
+            import pdb; pdb.set_trace()
         self.current_queries = list({x for query in self.current_queries \
                                 for x in query.multiply_by_core(cores, ['must'])})
 
