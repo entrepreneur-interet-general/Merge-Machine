@@ -836,7 +836,9 @@ class Labeller():
         self._sanity_check()
 
     def _sanity_check(self):
-        '''Make sure you are not crazy. Run this after updates'''
+        '''Make sure you are not crazy. Run this after updates in dev'''
+        
+        return
         # Labels
         if self.has_labels:
             assert len(self.labelled_pairs) \
