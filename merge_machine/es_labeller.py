@@ -515,8 +515,8 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
     
     def new_template_restricted(self, cores_to_remove, bool_levels_to_keep):
         '''
-        Return the current a new LabellerQueryTemplate based on the current 
-        instance, but for which none of the single query templates are included
+        Return the a new LabellerQueryTemplate based on the current instance, 
+        but for which none of the single query templates are included
         in cores_to_remove.
         
         INPUT:
@@ -1146,13 +1146,10 @@ class Labeller():
             if isinstance(r_col, str):
                 r_col = [r_col]
                 
-            try:
-                s_string = ' '.join(source_item[col] for col in s_col)
-                
-                if not any(s_string == ref_item[col] for col in r_col):
-                    return False
-            except:
-                import pdb; pdb.set_trace()
+            s_string = ' '.join(source_item[col] for col in s_col)
+            
+            if not any(s_string == ref_item[col] for col in r_col):
+                return False
         return True
     
     def _init_ref_gen(self):
@@ -1913,10 +1910,7 @@ class Labeller():
     @_log_wrapper
     def filter_by_core(self):
         MIN_SCORE = 0.2
-        try:
-            cores = [q.core for q in self.single_core_queries if q.score <= MIN_SCORE]
-        except:
-            import pdb; pdb.set_trace(  )
+        cores = [q.core for q in self.single_core_queries if q.score <= MIN_SCORE]
 
         self.current_queries = list({query.new_template_restricted(cores, ['must']) \
                                             for query in self.current_queries})
@@ -1976,10 +1970,8 @@ class Labeller():
         '''Add queries to current_queries by adding fields to current_queries'''
         print('EXPANDING BY CORE')
         MIN_SCORE = 0.7
-        try:
-            cores = [q for q in self.single_core_queries if q.score >= MIN_SCORE]
-        except:
-            import pdb; pdb.set_trace()
+        cores = [q for q in self.single_core_queries if q.score >= MIN_SCORE]
+
         self.current_queries = list({x for query in self.current_queries \
                                 for x in query.multiply_by_core(cores, ['must'])})
 
@@ -2018,9 +2010,9 @@ class Labeller():
         params['expected_precision'] = best_query.precision
         params['expected_recall'] = best_query.recall
         
-        params['exact_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'y']
-        params['non_matching_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'n']
-        params['forgotten_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'f']
+        params['exact_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'yes']
+        params['non_matching_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'no']
+        params['forgotten_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'forget_row']
         
         return params
     

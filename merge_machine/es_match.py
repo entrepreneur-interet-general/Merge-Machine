@@ -54,9 +54,9 @@ def es_linker(es, source, params):
     exact_pairs = params.get('exact_pairs', [])
     non_matching_pairs = params.get('non_matching_pairs', [])
     
-    exact_source_indexes = [x[0] for x in exact_pairs if x[1] is not None]
-    exact_ref_indexes = [x[1] for x in exact_pairs if x[1] is not None]
-    source_indexes = [x[0] for x in source.iterrows() if x [0] not in exact_source_indexes]
+    exact_source_indices = [x[0] for x in exact_pairs if x[1] is not None]
+    exact_ref_indices = [x[1] for x in exact_pairs if x[1] is not None]
+    source_indices = [x[0] for x in source.iterrows() if x [0] not in exact_source_indices]
     
     def _is_match(f_r, threshold):
         return bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold)
@@ -65,8 +65,8 @@ def es_linker(es, source, params):
         return bool(f_r['hits']['hits'])
     
     # Perform matching on non-exact pairs (not labelled)
-    if source_indexes:
-        rows = (x[1] for x in source.iterrows() if x[0] in source_indexes)
+    if source_indices:
+        rows = (x[1] for x in source.iterrows() if x[0] in source_indices)
         all_search_templates, full_responses = _bulk_search(es, index_name, [query_template], rows, must_filters, must_not_filters, num_results=1)
         full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
 
@@ -74,7 +74,7 @@ def es_linker(es, source, params):
         matches_in_ref = pd.DataFrame([f_r['hits']['hits'][0]['_source'] \
                                    if _has_match(f_r) \
                                    else {} \
-                                   for f_r in full_responses], index=source_indexes)
+                                   for f_r in full_responses], index=source_indices)
                         
         ref_id = pd.Series([f_r['hits']['hits'][0]['_id'] \
                                 if _has_match(f_r) \
@@ -99,21 +99,24 @@ def es_linker(es, source, params):
         matches_in_ref['__GAP_RATIO'] = confidence_gap / confidence
 
         # Put confidence to zero for user labelled negative pairs
-        sel = [x in non_matching_pairs for x in zip(source_indexes, matches_in_ref.__ID_REF)]
+        sel = [x in non_matching_pairs for x in zip(source_indices, matches_in_ref.__ID_REF)]
         for col in ['__CONFIDENCE', '__GAP', '__GAP_RATIO']:
             matches_in_ref.loc[sel, '__CONFIDENCE'] = 0    
             
     else:
         matches_in_ref = pd.DataFrame()
-        
+    
+    
+    
     # Perform matching exact (labelled) pairs
-    if exact_ref_indexes:
-        full_responses = [es.get(index_name, ref_idx) for ref_idx in exact_ref_indexes]
+    if exact_ref_indices:
+        full_responses = [es.get(index_name, ref_idx) for ref_idx in exact_ref_indices]
         exact_matches_in_ref = pd.DataFrame([f_r['_source'] for f_r in full_responses], 
-                                            index=exact_source_indexes)
+                                            index=exact_source_indices)
         exact_matches_in_ref.columns = [x + '__REF' for x in exact_matches_in_ref.columns]
-        exact_matches_in_ref['__ID_REF'] = exact_ref_indexes
+        exact_matches_in_ref['__ID_REF'] = exact_ref_indices
         exact_matches_in_ref['__CONFIDENCE'] = 999
+        
     else:
         exact_matches_in_ref = pd.DataFrame()
     
