@@ -44,8 +44,6 @@ def es_linker(es, source, params):
             exact_pairs: list of (source_id, ES_ref_id) which are certain matches
     '''
     
-    #es = Elasticsearch(**params['es_conn'])
-    
     index_name = params['index_name']
     query_template = params['query_template']
     must_filters = params.get('must', {})
@@ -54,8 +52,8 @@ def es_linker(es, source, params):
     exact_pairs = params.get('exact_pairs', [])
     non_matching_pairs = params.get('non_matching_pairs', [])
     
-    exact_source_indices = [x[0] for x in exact_pairs if x[1] is not None]
-    exact_ref_indices = [x[1] for x in exact_pairs if x[1] is not None]
+    exact_source_indices = [x[0] for x in exact_pairs if x[1] is not None if x[0] in source.index]
+    exact_ref_indices = [x[1] for x in exact_pairs if x[1] is not None if x[0] in source.index]
     source_indices = [x[0] for x in source.iterrows() if x [0] not in exact_source_indices]
     
     def _is_match(f_r, threshold):
@@ -101,12 +99,10 @@ def es_linker(es, source, params):
         # Put confidence to zero for user labelled negative pairs
         sel = [x in non_matching_pairs for x in zip(source_indices, matches_in_ref.__ID_REF)]
         for col in ['__CONFIDENCE', '__GAP', '__GAP_RATIO']:
-            matches_in_ref.loc[sel, '__CONFIDENCE'] = 0    
-            
+            matches_in_ref.loc[sel, '__CONFIDENCE'] = 0
+        
     else:
         matches_in_ref = pd.DataFrame()
-    
-    
     
     # Perform matching exact (labelled) pairs
     if exact_ref_indices:
