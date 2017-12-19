@@ -819,7 +819,6 @@ class Labeller():
         self._init_core_queries(match_cols, columns_to_index) # creates self.single_core_queries
         #self._init_history() # creates self.history
         
-        self.has_labels = True
         self._init_source_gen() # creates self.source_gen
         
         self.current_source_idx = None
@@ -829,6 +828,8 @@ class Labeller():
         self.current_ref_item = None
         
         self.current_es_score = None
+
+        self.status = 'ACTIVE' # 'ACTIVE', 'NO_LABELS', 'NO_QUERIES'
 
         if next_row:
             self._next_row()
@@ -840,7 +841,7 @@ class Labeller():
         
         return
         # Labels
-        if self.has_labels:
+        if self.status == 'ACTIVE':
             assert len(self.labelled_pairs) \
                         == len(self.labels)
             
@@ -883,8 +884,6 @@ class Labeller():
         
         dict_['current_queries'] = [query.to_dict() for query in self.current_queries]   
         dict_['single_core_queries'] = [query.to_dict() for query in self.single_core_queries]   
-
-        dict_['has_labels'] = self.has_labels
         
         dict_['current_query'] = self.current_query.to_dict()
         dict_['current_query_ranking'] = self.current_query_ranking
@@ -899,6 +898,8 @@ class Labeller():
         dict_['current_es_score'] = self.current_es_score
         
         dict_['ref_id_to_data'] = self.ref_id_to_data
+        
+        dict_['status'] = self.status
         
         # self._init_source_gen() # creates self.source_gen
         return dict_
@@ -924,7 +925,6 @@ class Labeller():
         labeller.current_queries = [LabellerQueryTemplate.from_dict(x) for x in dict_['current_queries']]
         labeller.single_core_queries = [CoreScorerQueryTemplate.from_dict(x) for x in dict_['single_core_queries']]
         
-        labeller.has_labels = dict_['has_labels']
         labeller._init_source_gen() # creates self.source_gen
         
         labeller.current_query = LabellerQueryTemplate.from_dict(dict_['current_query'])
@@ -939,6 +939,8 @@ class Labeller():
         labeller.current_es_score = dict_['current_es_score']
 
         labeller.ref_id_to_data = dict_['ref_id_to_data']
+
+        labeller.status = dict_['status']
 
         labeller._sanity_check()
         
@@ -1202,7 +1204,7 @@ class Labeller():
             try:
                 self.current_source_idx, self.current_source_item = next(self.source_gen)
             except:
-                self.has_labels = False
+                self.status = 'NO_LABELS'
                 break
             else:
                 self._init_ref_gen()
@@ -1311,12 +1313,25 @@ class Labeller():
     
     def majority_vote(self, max_num_voters, min_score=0):
         ''' #TODO: Document / implement min_score'''
+        if not self.current_queries:
+            return None
+        
         count = defaultdict(int)
         for query in self.current_queries[:max_num_voters]:
             if query.history_pairs[self.current_source_idx]:
-                count[query.history_pairs[self.current_source_idx][0]] += 1
+                if query.thresh is None:
+                    thresh = query.thresh
+                else:
+                    thresh = 0
+                # Add to count if source is seen as match (score above threshold)
+                if query.all_scores[self.current_source_idx][0] \
+                        >= thresh:
+                    count[query.history_pairs[self.current_source_idx][0]] += 1
+                else:
+                    count['nores'] += 1
             else:
                 count['nores'] += 1
+            
         best_pair = sorted(list(count.items()), key=lambda x: x[1], reverse=True)[0][0]
         return best_pair
     
@@ -1332,7 +1347,7 @@ class Labeller():
         real precision, recall, scores...
         '''
         # Only sort if there are values to sort on
-        if not self.current_queries[0].first_scores:
+        if (not self.current_queries) or (not self.current_queries[0].first_scores):
             return
         
         # Alternate between random and largest score
@@ -1568,9 +1583,6 @@ class Labeller():
                 + "p" or "previous": back to previous state
         '''
         
-        print(self.num_positive_rows_labelled)
-        print(self.num_rows_labelled)
-        
         print('At pair {0} / {1} ; user input: {2}'.format(self.current_source_idx, 
                                               self.current_ref_idx, user_input))
         
@@ -1614,7 +1626,6 @@ class Labeller():
             try:
                 print('here')
                 (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
-                print('there YOOAOAOAO')
 
                 # If iterator runs out: next_row = True
                 self._update_row_count(False, yes)
@@ -1653,11 +1664,12 @@ class Labeller():
             
             # Expand queries
             self.expand()
-            
-            # Get new pair
-            self._next_row()
-            
-            self._sanity_check()
+                
+            if self.status == 'ACTIVE':
+                # Get new pair
+                self._next_row()
+                
+                self._sanity_check()
 
     @print_name
     def _re_score_history(self, call_next_row, learn=False):        
@@ -1795,23 +1807,34 @@ class Labeller():
     
         def wrapper(self, *args, **kwargs):
             self._sort_queries()
-            best_query = self.current_queries[0]
             log = dict()
-            
             log['func_name'] = func.__name__
-            log['old_best_query'] = best_query
-            log['old_precision'] = best_query.precision
-            log['old_recall'] = best_query.recall
-            log['old_score'] = best_query.score
+            if self.current_queries:
+                best_query = self.current_queries[0]
+                log['old_best_query'] = best_query
+                log['old_precision'] = best_query.precision
+                log['old_recall'] = best_query.recall
+                log['old_score'] = best_query.score
+            else:
+                log['old_best_query'] = None
+                log['old_precision'] = None
+                log['old_recall'] = None
+                log['old_score'] = None          
             
             res = func(self, *args, **kwargs)
 
             self._sort_queries()
-            best_query = self.current_queries[0]
-            log['best_query'] = best_query
-            log['precision'] = best_query.precision
-            log['recall'] = best_query.recall
-            log['score'] = best_query.score
+            if self.current_queries:    
+                best_query = self.current_queries[0]
+                log['best_query'] = best_query
+                log['precision'] = best_query.precision
+                log['recall'] = best_query.recall
+                log['score'] = best_query.score
+            else:
+                log['best_query'] = None
+                log['precision'] = None
+                log['recall'] = None
+                log['score'] = None
                         
             try:
                 self.log
@@ -1856,7 +1879,8 @@ class Labeller():
             self._re_score_history(call_next_row=False)
     
         if not self.current_queries:
-            raise RuntimeError('No more queries after filtering')
+            self.status = 'NO_QUERIES'
+            logging.warning('No more queries after filtering')
         
     def expand(self):
         '''
@@ -1911,6 +1935,10 @@ class Labeller():
     @_query_counter_wrapper    
     @_log_wrapper
     def filter_by_core(self):
+        '''
+        Restrict each individual current query to their essential core queries 
+        (remove core queries with too low of a score)
+        '''
         MIN_SCORE = 0.2
         cores = [q.core for q in self.single_core_queries if q.score <= MIN_SCORE]
 
@@ -1922,13 +1950,13 @@ class Labeller():
     @_query_counter_wrapper
     @_log_wrapper
     def filter_by_precision(self):
+        '''Filter current_queries based on their precision'''
         MIN_PRECISION_TAB = [(20, 0.7), (10, 0.5), (5, 0.3)]
         def _min_precision(self):
             '''
             Return the minimum precision to keep a query template, according to 
             the number of rows currently labelled
             '''
-
             for min_idx, min_precision in MIN_PRECISION_TAB:
                 if self._nprl() >= min_idx:
                     break    
@@ -2056,6 +2084,9 @@ class Labeller():
     def to_emit(self):
         '''Creates a dict to be sent to the template #TODO: fix this''' # DONE-ISH
         dict_to_emit = dict()
+        
+        # Status (ACTIVE, NO_LABELS, NO_QUERIES)
+        dict_to_emit['status'] = self.status
 
         # Info on labeller
         dict_to_emit['t_p'] = self.TARGET_PRECISION
@@ -2107,7 +2138,7 @@ class Labeller():
                 dict_to_emit['estimated_is_match'] = self.current_es_score >= current_query.thresh
             else:
                 dict_to_emit['estimated_is_match'] = None
-        
+                
         return dict_to_emit
     
 
@@ -2176,7 +2207,10 @@ class ConsoleLabeller(Labeller):
                 self.change_tab(user_input)
                 
             elif self.current_tab == 'labeller':
-                self.update(user_input)
+                if self.status == 'ACTIVE':
+                    self.update(user_input)
+                else:
+                    print('Current status is {0}. Labeller update was not performed'.format(self.status))
                 
             elif self.current_tab == 'filter':
                 self.update_filter(user_input)
@@ -2216,7 +2250,11 @@ class ConsoleLabeller(Labeller):
         print('*** In tab: {0} ***'.format(self.current_tab))
         
         if self.current_tab == 'labeller':
-            self.display_pair()
+            if self.status == 'ACTIVE':
+                self.display_pair()
+            else:
+                print('>>> Cannot display any pairs. You can still update filters.' \
+                      ' Type "quit" to exit labeller.')
             
         elif self.current_tab == 'menu':
             self.display_menu()
