@@ -829,7 +829,7 @@ class Labeller():
         
         self.current_es_score = None
 
-        self.status = 'ACTIVE' # 'ACTIVE', 'NO_LABELS', 'NO_QUERIES'
+        self.status = 'ACTIVE' # 'ACTIVE', 'NO_ITEMS_TO_LABEL', 'NO_QUERIES'
 
         if next_row:
             self._next_row()
@@ -1059,7 +1059,7 @@ class Labeller():
                             self.current_source_item, self.NUM_RESULTS)
             self.add_results(results)   
 
-    def add_custom_search(self, col_to_search, max_num_results):
+    def add_custom_search(self, col_to_search, max_num_results=10):
         '''
         Search for the items in col_to_search (in the corresponding columns) 
         and add results of the query in the body in front of ref_gen.
@@ -1204,7 +1204,7 @@ class Labeller():
             try:
                 self.current_source_idx, self.current_source_item = next(self.source_gen)
             except:
-                self.status = 'NO_LABELS'
+                self.status = 'NO_ITEMS_TO_LABEL'
                 break
             else:
                 self._init_ref_gen()
@@ -1324,9 +1324,12 @@ class Labeller():
                 else:
                     thresh = 0
                 # Add to count if source is seen as match (score above threshold)
-                if query.all_scores[self.current_source_idx][0] \
-                        >= thresh:
-                    count[query.history_pairs[self.current_source_idx][0]] += 1
+                try:
+                    if query.first_scores[self.current_source_idx] \
+                            >= thresh:
+                        count[query.history_pairs[self.current_source_idx][0]] += 1
+                except:
+                    import pdb; pdb.set_trace()
                 else:
                     count['nores'] += 1
             else:
@@ -2085,7 +2088,7 @@ class Labeller():
         '''Creates a dict to be sent to the template #TODO: fix this''' # DONE-ISH
         dict_to_emit = dict()
         
-        # Status (ACTIVE, NO_LABELS, NO_QUERIES)
+        # Status (ACTIVE, NO_ITEMS_TO_LABEL, NO_QUERIES)
         dict_to_emit['status'] = self.status
 
         # Info on labeller
