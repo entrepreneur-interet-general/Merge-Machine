@@ -22,6 +22,8 @@ setup(
   python_requires='>=3'
   install_requires=[
           'elasticsearch',
-          'unidecode',
+          'numpy',
+          'pandas',
+          'unidecode'
       ],
 )
