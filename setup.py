@@ -19,7 +19,7 @@ setup(
   download_url = 'https://github.com/eig-2017/Merge-Machine/archive/0.1.3.tar.gz',
   keywords = ['csv', 'link', 'merge', 'elasticsearch'],
   classifiers = [],
-  python_requires='>=3'
+  python_requires='>=3',
   install_requires=[
           'elasticsearch',
           'numpy',
