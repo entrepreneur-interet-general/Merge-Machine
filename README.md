@@ -21,7 +21,7 @@ pip3 install merge-machine
 
 Or for the bleeding edge version:
 ```
-git clone https://github.com/eig-2017/Merge-Machine
+git clone https://github.com/entrepreneur-interet-general/Merge-Machine.git
 cd Merge-Machine
 pip3 install -e .
 ```
