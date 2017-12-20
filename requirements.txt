@@ -1,5 +1,4 @@
 unidecode
 pandas
-fuzzywuzzy
 numpy
 elasticsearch
