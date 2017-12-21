@@ -28,8 +28,9 @@ from .helpers import _bulk_search
 
 
 
-def _is_match(resp, threshold):
-    return bool(resp['hits']['hits']) and (resp['hits']['max_score'] >= threshold)
+def _is_match(resp, thresh):
+    '''Has hits and best results is above threshold'''
+    return bool(resp['hits']['hits']) and (resp['hits']['max_score'] >= thresh)
 
 def _has_hits(resp):
     return bool(resp['hits']['hits'])
@@ -41,15 +42,16 @@ def _first_match(list_of_responses, list_of_thresholds):
     
     INPUT: 
         list_of_responses: 
+        list_of_thresholds
     '''
     assert len(list_of_responses) == len(list_of_thresholds)
     
-    for i, resp in enumerate(list_of_responses):
-        if _has_hits(resp) and _is_match(resp):
-            return resp
+    for i, (resp, thresh) in enumerate(zip(list_of_responses, list_of_thresholds)):
+        if _is_match(resp, thresh):
+            return i, resp
     for i, resp in enumerate(list_of_responses):
         if _has_hits(resp):
-            return resp
+            return i, resp
     return 0, list_of_responses[0]
             
 
@@ -107,8 +109,8 @@ def es_linker(es, source, params):
     if source_indices:
         rows = (x[1] for x in source.iterrows() if x[0] in source_indices)
         all_search_templates, res_of_bulk_search = _bulk_search(es, index_name, 
-                    query_templates, rows, must_filters, must_not_filters, num_results=1)
-        full_responses = _bulk_search_to_full_response(res_of_bulk_search, thresholds)
+                    [q['template'] for q in queries], rows, must_filters, must_not_filters, num_results=1)
+        full_responses = _bulk_search_to_full_response(res_of_bulk_search, [q['thresh'] for q in queries])
         del res_of_bulk_search
 
         # TODO: remove threshold condition
