@@ -117,27 +117,31 @@ def es_linker(es, source, params):
         matches_in_ref = pd.DataFrame([resp['hits']['hits'][0]['_source'] \
                                    if _has_hits(resp) \
                                    else {} \
-                                   for resp in full_responses], index=source_indices)
+                                   for _, resp in full_responses], index=source_indices)
                         
         ref_id = pd.Series([resp['hits']['hits'][0]['_id'] \
                                 if _has_hits(resp) \
                                 else np.nan \
-                                for resp in full_responses], index=matches_in_ref.index)
+                                for _, resp in full_responses], index=matches_in_ref.index)
     
         confidence = pd.Series([resp['hits']['hits'][0]['_score'] \
                                 if _has_hits(resp) \
                                 else np.nan \
-                                for resp in full_responses], index=matches_in_ref.index)
+                                for _, resp in full_responses], index=matches_in_ref.index)
+        
+        threshold = pd.Series([queries[i]['thresh'] \
+                                for i, _ in full_responses], index=matches_in_ref.index)
         
         confidence_gap = pd.Series([resp['hits']['hits'][0]['_score'] - resp['hits']['hits'][1]['_score']
                                 if (len(resp['hits']['hits']) >= 2) and _has_hits(resp) \
                                 else np.nan \
-                                for resp in full_responses], index=matches_in_ref.index)
+                                for i, resp in full_responses], index=matches_in_ref.index)
 
         matches_in_ref.columns = [x + '__REF' for x in matches_in_ref.columns]
         matches_in_ref['__IS_MATCH'] = confidence >= threshold
         matches_in_ref['__ID_REF'] = ref_id
         matches_in_ref['__CONFIDENCE'] = confidence    
+        matches_in_ref['__THRESH'] = threshold
         matches_in_ref['__GAP'] = confidence_gap
         matches_in_ref['__GAP_RATIO'] = confidence_gap / confidence
 
