@@ -18,7 +18,9 @@ from .analyzers_resource import city
 DEFAULT_ANALYZER = 'case_insensitive_keyword'
 
 # Default analyzers (for columns that should match)
-DEFAULT_ANALYZERS = {'case_insensitive_keyword', 'city', 'integers', 'n_grams'}
+DEFAULT_CUSTOM_ANALYZERS = {'case_insensitive_keyword', 'city', 'integers', 'n_grams'}
+DEFAULT_STOCK_ANALYZERS = {'french'}
+DEFAULT_ANALYZERS = DEFAULT_CUSTOM_ANALYZERS | DEFAULT_STOCK_ANALYZERS
 
 # Create ES config template for custom analyzers
-INDEX_SETTINGS_TEMPLATE = _gen_index_settings_from_analyzers([eval(x) for x in DEFAULT_ANALYZERS]) # TODO: change this
+INDEX_SETTINGS_TEMPLATE = _gen_index_settings_from_analyzers([eval(x) for x in DEFAULT_CUSTOM_ANALYZERS]) # TODO: change this
