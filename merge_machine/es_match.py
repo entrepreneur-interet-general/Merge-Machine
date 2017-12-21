@@ -93,10 +93,9 @@ def es_linker(es, source, params):
     '''
     
     index_name = params['index_name']
-    query_templates = params['query_templates']
+    queries = params['queries'] # queries is {'template': ..., 'threshold':...}
     must_filters = params.get('must', {})
     must_not_filters = params.get('must_not', {})
-    thresholds = params['thresholds']
     exact_pairs = params.get('exact_pairs', [])
     non_matching_pairs = params.get('non_matching_pairs', [])
     
@@ -104,12 +103,11 @@ def es_linker(es, source, params):
     exact_ref_indices = [x[1] for x in exact_pairs if x[1] is not None if x[0] in source.index]
     source_indices = [x[0] for x in source.iterrows() if x [0] not in exact_source_indices]
     
-
-    
     # Perform matching on non-exact pairs (not labelled)
     if source_indices:
         rows = (x[1] for x in source.iterrows() if x[0] in source_indices)
-        all_search_templates, res_of_bulk_search = _bulk_search(es, index_name, query_templates, rows, must_filters, must_not_filters, num_results=1)
+        all_search_templates, res_of_bulk_search = _bulk_search(es, index_name, 
+                    query_templates, rows, must_filters, must_not_filters, num_results=1)
         full_responses = _bulk_search_to_full_response(res_of_bulk_search, thresholds)
         del res_of_bulk_search
 
