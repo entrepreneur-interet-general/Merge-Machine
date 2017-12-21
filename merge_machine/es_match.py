@@ -45,7 +45,6 @@ def _first_match(list_of_responses, list_of_thresholds):
         list_of_thresholds
     '''
     assert len(list_of_responses) == len(list_of_thresholds)
-    
     for i, (resp, thresh) in enumerate(zip(list_of_responses, list_of_thresholds)):
         if _is_match(resp, thresh):
             return i, resp
@@ -70,12 +69,12 @@ def _bulk_search_to_full_response(res_of_bulk_search, list_of_thresholds):
             with each element being the first match found
     '''
     
-    num_queries_per_row = len(list_of_thresholds)
-    assert len(res_of_bulk_search) % num_queries_per_row == 0
+    num_rows_source = int(len(res_of_bulk_search) / len(list_of_thresholds))
+    assert len(res_of_bulk_search) % num_rows_source == 0
     
     res_of_bulk_search = [res_of_bulk_search[i] for i in range(len(res_of_bulk_search))] # Don't use items to preserve order
-    return [_first_match(res_of_bulk_search[n:n+num_queries_per_row], list_of_thresholds) \
-                      for n in range(0, len(res_of_bulk_search), num_queries_per_row)]
+    return [_first_match(res_of_bulk_search[n::num_rows_source], list_of_thresholds) \
+                      for n in range(0, num_rows_source)]
 
 def es_linker(es, source, params):
     '''
@@ -108,12 +107,12 @@ def es_linker(es, source, params):
     # Perform matching on non-exact pairs (not labelled)
     if source_indices:
         rows = (x[1] for x in source.iterrows() if x[0] in source_indices)
+        
         all_search_templates, res_of_bulk_search = _bulk_search(es, index_name, 
                     [q['template'] for q in queries], rows, must_filters, must_not_filters, num_results=1)
         full_responses = _bulk_search_to_full_response(res_of_bulk_search, [q['thresh'] for q in queries])
         del res_of_bulk_search
 
-        # TODO: remove threshold condition
         matches_in_ref = pd.DataFrame([resp['hits']['hits'][0]['_source'] \
                                    if _has_hits(resp) \
                                    else {} \
@@ -131,23 +130,24 @@ def es_linker(es, source, params):
         
         threshold = pd.Series([queries[i]['thresh'] \
                                 for i, _ in full_responses], index=matches_in_ref.index)
-        
-        confidence_gap = pd.Series([resp['hits']['hits'][0]['_score'] - resp['hits']['hits'][1]['_score']
-                                if (len(resp['hits']['hits']) >= 2) and _has_hits(resp) \
-                                else np.nan \
-                                for i, resp in full_responses], index=matches_in_ref.index)
 
         matches_in_ref.columns = [x + '__REF' for x in matches_in_ref.columns]
         matches_in_ref['__IS_MATCH'] = confidence >= threshold
         matches_in_ref['__ID_REF'] = ref_id
         matches_in_ref['__CONFIDENCE'] = confidence    
         matches_in_ref['__THRESH'] = threshold
-        matches_in_ref['__GAP'] = confidence_gap
-        matches_in_ref['__GAP_RATIO'] = confidence_gap / confidence
-
+        
+        # TODO: confidence_gap makes no sense with multiple queries
+        #        confidence_gap = pd.Series([resp['hits']['hits'][0]['_score'] - resp['hits']['hits'][1]['_score']
+        #                                if (len(resp['hits']['hits']) >= 2) and _has_hits(resp) \
+        #                                else np.nan \
+        #                                for i, resp in full_responses], index=matches_in_ref.index)        
+        #        matches_in_ref['__GAP'] = confidence_gap
+        #        matches_in_ref['__GAP_RATIO'] = confidence_gap / confidence
+        
         # Put confidence to zero for user labelled negative pairs
         sel = [x in non_matching_pairs for x in zip(source_indices, matches_in_ref.__ID_REF)]
-        for col in ['__CONFIDENCE', '__GAP', '__GAP_RATIO']:
+        for col in ['__CONFIDENCE']: #, '__GAP', '__GAP_RATIO']:
             matches_in_ref.loc[sel, '__CONFIDENCE'] = 0
         
     else:

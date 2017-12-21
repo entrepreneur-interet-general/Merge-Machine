@@ -2050,14 +2050,15 @@ class Labeller():
         
         params = dict()
         params['index_name'] = self.ref_index_name
-        params['query_template'] = best_query._as_tuple()
+        params['queries'] = [{'template': q._as_tuple(), 
+                              'thresh': 0,
+                              'best_thresh': q.thresh,
+                              'expected_precision': best_query.precision,
+                              'expected_recall': q.recall} \
+                                  for q in self.current_queries]
+        
         params['must'] = self.must_filters
         params['must_not'] = self.must_not_filters
-        
-        params['thresh'] = 0 
-        params['best_thresh'] = best_query.thresh
-        params['expected_precision'] = best_query.precision
-        params['expected_recall'] = best_query.recall
         
         params['exact_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'yes']
         params['non_matching_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'no']
