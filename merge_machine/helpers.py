@@ -115,7 +115,7 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
                         + [
                           {'multi_match': {
                                   'fields': [col + s_q_t[3] for col in s_q_t[2]], 
-                                  'query': _remove_words(row[s_q_t[1]].str.cat(sep=' '), []),
+                                  'query': _remove_words(' '.join(row[idx] for idx in s_q_t[1] if isinstance(row[idx], str)), []),
                                   'boost': s_q_t[4]
                                   }
                           } \
