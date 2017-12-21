@@ -885,7 +885,10 @@ class Labeller():
         dict_['current_queries'] = [query.to_dict() for query in self.current_queries]   
         dict_['single_core_queries'] = [query.to_dict() for query in self.single_core_queries]   
         
-        dict_['current_query'] = self.current_query.to_dict()
+        if self.current_query is None:
+            dict_['current_query'] = None
+        else:
+            dict_['current_query'] = self.current_query.to_dict()
         dict_['current_query_ranking'] = self.current_query_ranking
         
         dict_['current_source_idx'] = self.current_source_idx
@@ -927,7 +930,10 @@ class Labeller():
         
         labeller._init_source_gen() # creates self.source_gen
         
-        labeller.current_query = LabellerQueryTemplate.from_dict(dict_['current_query'])
+        if dict_['current_query'] is None:
+            labeller.current_query = None
+        else:
+            labeller.current_query = LabellerQueryTemplate.from_dict(dict_['current_query'])
         labeller.current_query_ranking = dict_['current_query_ranking']
         
         labeller.current_source_idx = dict_['current_source_idx']
@@ -1073,8 +1079,22 @@ class Labeller():
         '''
         DEFAULT_SEARCH_ANALYZER = '.french'
         query_template = [('must', key, key, DEFAULT_SEARCH_ANALYZER, 1) for key in col_to_search]
-        body = _gen_body(query_template, col_to_search, num_results=max_num_results) # TODO: add global filters ?
         
+        row = dict()
+        for key, value in col_to_search.items():
+            if isinstance(key, str):
+                row[key] = value
+            else:
+                for i, k in enumerate(key):
+                    if i == 0:
+                        row[k] = ' '.join(value)
+                    else:
+                        row[k] = None
+        
+        body = _gen_body(query_template, row, num_results=max_num_results) # TODO: add global filters ?
+        
+        print(query_template)
+        print(col_to_search)
         print(body)
         # Remove previous results of search
         self.clear_custom_search()
