@@ -1320,16 +1320,12 @@ class Labeller():
         for query in self.current_queries[:max_num_voters]:
             if query.history_pairs[self.current_source_idx]:
                 if query.thresh is None:
-                    thresh = query.thresh
-                else:
                     thresh = 0
+                else:
+                    thresh = query.thresh
                 # Add to count if source is seen as match (score above threshold)
-                try:
-                    if query.first_scores[self.current_source_idx] \
-                            >= thresh:
-                        count[query.history_pairs[self.current_source_idx][0]] += 1
-                except:
-                    import pdb; pdb.set_trace()
+                if query.first_scores[self.current_source_idx] >= thresh:
+                    count[query.history_pairs[self.current_source_idx][0]] += 1
                 else:
                     count['nores'] += 1
             else:
