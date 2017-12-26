@@ -631,8 +631,8 @@ class Labeller():
         positive filters on fields of the referential (to force results to 
         include certain words in certain fields).
     self.must_not_filters: `dict` shaped as {column: list_of_words, ...}
-        negative filters on fields of the referential (
-            to NOT return results that include certain words)
+        negative filters on fields of the referential (to NOT return results 
+        that include certain words)
     """
     NUM_RESULTS = 3
     

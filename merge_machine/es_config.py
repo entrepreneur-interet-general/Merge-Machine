@@ -5,8 +5,7 @@ Created on Mon Aug 28 19:27:30 2017
 
 @author: m75380
 
-A list of standard Elasticsearch analyzers
-
+List global variables defining standard analyzers to use and their definitions.
 """
 from .helpers import _gen_index_settings_from_analyzers
 

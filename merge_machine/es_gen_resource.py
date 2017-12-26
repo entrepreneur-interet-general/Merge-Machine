@@ -103,12 +103,6 @@ file_path_country = os.path.join(elasticsearch_resource_dir, 'es_country_synonym
 
 
 # =============================================================================
-# 
-# =============================================================================
-
-
-
-# =============================================================================
 # Generate Resource For organization analyzer
 # =============================================================================
 file_path_keep = os.path.join(elasticsearch_resource_dir, 'es_organization_keep.txt') 

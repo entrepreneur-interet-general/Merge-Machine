@@ -15,38 +15,37 @@ import json
 import unidecode
 
 def deduplicate(tab, columns):
-    '''Creates a smaller version of the original table'''
+    '''Deduplicated the original table according to its values in `columns`.'''
     
     raise NotImplementedError
     return smaller_tab, indexes
 
 
 def re_duplicate(tab, smaller_tab, columns, indexes):
-    '''
-    Takes the output of deduplicate and recreates the table with the original
+    '''Takes the output of `deduplicate` and recreates the table of the original
     size.
     '''
     raise NotImplementedError
     return original_tab
 
-def my_unidecode(string):
-    '''unidecode or return empty string'''
+def _my_unidecode(string):
+    '''Unidecode or return empty string.'''
     if isinstance(string, str):
         return unidecode.unidecode(string)
     else:
         return ''
 
 def _remove_words(string, words):
-    # Replace this by python equivalent of each analyzer ?
-    string = my_unidecode(string).lower()
+    '''Remove words from string.'''
+    # TODO: Replace this by python equivalent of each analyzer ?
+    string = _my_unidecode(string).lower()
     for word in words:
         string = string.replace(word, '')
     return string
 
 def _reformat_s_q_t(s_q_t):
-    '''
-    Makes sure s_q_t[1] is a list and s_q_t[2] is list (multi_match) or string
-    (match) if there is only one column    
+    '''Makes sure s_q_t[1] is a list and s_q_t[2] is list (multi_match) or 
+    string (match) if there is only one column.
     '''
     old_len = len(s_q_t)
     
@@ -77,24 +76,44 @@ def _reformat_s_q_t(s_q_t):
     return to_return
 
 def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_results=3):
+    '''Generate the dict representation of the json to pass to Elasticsearch 
+    for it to execute the desired query.
+    
+    This function generate the search request body for the data in row using 
+    the `query_template`. In addition it can add filters (`must_filters`) or 
+    words to exclude (`must_not_filters`).
+    
+    Parameters
+    ----------
+    query_template: iterator of tuples of length 5
+        Query template represents a compound query template to use in the query.
+        (See doc in `query_templates.CompoundQueryTemplate`).
+        Ex: ((bool_lvl, source_col, ref_col, analyzer_suffix, boost), ...)
+    row: `pandas.Series` or dict like {col1: val, col2: val2, ...}
+        The data to search for.
+    must_filters: `dict` shaped as {column: list_of_words, ...}
+        Terms to filter by field (AND: will include ONLY IF ALL are in text).
+    must_not_filters: `dict` shaped as {column: list_of_words, ...}
+        Terms to exclude by field from search (OR: will exclude if ANY is found).
+    num_results: int
+        Maximum number of results for the query.
+    
+    Returns
+    -------
+    body: dict
+        Dict representation of the JSON object to pass to Elasticsearch to 
+        perform the query.
+
     '''
-    Generate the string to pass to Elastic search for it to execute query
     
-    INPUT:
-        - query_template: ((bool_lvl, source_col, ref_col, analyzer_suffix, boost), ...)
-        - row: pandas.Series from the source object
-        - must: terms to filter by field (AND: will include ONLY IF ALL are in text)
-        - must_not: terms to exclude by field from search (OR: will exclude if ANY is found)
-        - num_results: Max number of results for the query
+    #==========================================================================
+    # NB: 
+    # s_q_t: single_query_template
+    # source_val = row[s_q_t[1]]
+    # key = s_q_t[2] + s_q_t[3]
+    # boost = s_q_t[4]
+    #==========================================================================
     
-    OUTPUT:
-        - body: the query as string
-    
-    NB: s_q_t: single_query_template
-        source_val = row[s_q_t[1]]
-        key = s_q_t[2] + s_q_t[3]
-        boost = s_q_t[4]
-    '''
     DEFAULT_FILTER_FIELD = '.french' # TODO: replace by standard or whitespace
     
     query_template = [_reformat_s_q_t(s_q_t) for s_q_t in query_template]
@@ -137,17 +156,33 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
 
 
 def _gen_bulk(index_name, search_templates, must, must_not, num_results, chunk_size=100):
-    '''
-    Create a bulk generator with all search templates
+    '''Create a generator of strings for bulk requests in Elasticsearch.
     
-    INPUT:
-        - search_templates: iterator of form ((query_template, row), ...)
-        - num_results: max num results per individual query
-        - chunk_size: number of queries per bulk
+    Create bulks of all requests in search_templates and chop them off by 
+    `chunk_size` so as not to overload Elasticsearch.
     
-    OUTPUT:
-        - bulk_body: string containing queries formated for ES
-        - queries: list of queries
+    Parameters
+    ----------
+    index_name: str
+        The Elasticsearch index to use for search.
+    search_templates: iterator 2 len tuples of shape `(query_template, row)`
+        Each tuple represents a query (searching for the data in `row` using
+        `query_template`).
+    must: `dict` shaped as {column: list_of_words, ...}
+        Terms to filter by field (AND: will include ONLY IF ALL are in text).
+    must_not: `dict` shaped as {column: list_of_words, ...}
+        Terms to exclude by field from search (OR: will exclude if ANY is found).
+    num_results: int
+        The maximum number results per individual query.
+    chunk_size: int
+        Number of queries per bulk.
+    
+    Yields
+    -------
+    bulk_body: string 
+        Bulk query of size `chunk_size` formated for ES.
+    queries: list
+        The list of the queries performed.
     '''
     
     queries = []
@@ -171,14 +206,36 @@ def _gen_bulk(index_name, search_templates, must, must_not, num_results, chunk_s
         yield bulk_body, queries
 
 def _bulk_search(es, index_name, all_query_templates, rows, must_filters, must_not_filters, num_results=3):
-    '''
-    Searches for the values in rows with all the search templates in 
-    all_query_templates. Retry on error.
+    '''Search for multiple rows with multiple query templates.
     
-    INPUT:
-        - all_query_templates: iterator of queries to perform
-        - rows: iterator of pandas.Series containing the rows to match
-        - num_results: max number of results per individual query    
+    Bulk search for all rows in `rows` trying -for each row- all query 
+    templates in `all_query_templates`.
+    
+    Parameters
+    ----------
+    es: instance of `Elasticsearch`
+        Connection to Elasticsearch.
+    index_name: str
+        Name of the index in Elasticsearch.
+    all_query_templates: iterator 2 len tuples of shape `(query_template, row)`
+        The queries to use for search. Each tuple represents a query 
+        (searching for the data in `row` using `query_template`).
+    rows: iterator of pandas.Series or dict like `{col1: val1, col2: val2, ...}`
+        The rows to search for.
+    must_filters: `dict` shaped as {column: list_of_words, ...}
+        Terms to filter by field (AND: will include ONLY IF ALL are in text).
+    must_not_filters: `dict` shaped as {column: list_of_words, ...}
+        Terms to exclude by field from search (OR: will exclude if ANY is found
+    num_results: int
+        The maximum number results per individual query. 
+        
+    Returns
+    -------
+    og_search_templates: list
+        The search templates that were used in the same order as 
+        `full_responses`.
+    full_responses: list of Elasticsearch results
+        List of all results.
     '''
     i = 1
     full_responses = dict() 
@@ -195,7 +252,6 @@ def _bulk_search(es, index_name, all_query_templates, rows, must_filters, must_n
             responses.extend(es.msearch(bulk_body)['responses']) #, index=index_name)
             
         # TODO: add error on query template with no must or should
-        
         has_error_vect = ['error' in x for x in responses]
         has_hits_vect = [('error' not in x) and bool(x['hits']['hits']) for x in responses]
         
@@ -219,12 +275,21 @@ def _bulk_search(es, index_name, all_query_templates, rows, must_filters, must_n
 
 
 def _gen_index_settings_from_analyzers(analyzers):
-    '''
-    Takes our own custom analyzer definitions and turns them into appropriate
-    input for Elasticsearch settings.
+    '''Takes our custom analyzer definitions and turns them into appropriate
+    input for Elasticsearch settings for index creation.
     
-    INPUT:
-        analyzers: list or set of our custom definition of analyzers    
+    Parameters
+    ----------
+    analyzers: iterator of dict 
+        Iterator of custom definition of analyzers.
+        
+        Ex: See for example the `city` analyzer in `analyzers_resource.py`
+        
+    Returns
+    -------
+    index_settings_template: dict
+        A dict formated to be used as input during index creation in 
+        Elasticsearch.     
     '''
     index_settings_template = {
         "settings": {
@@ -244,16 +309,30 @@ def _gen_index_settings_from_analyzers(analyzers):
 
  
 def gen_index_settings(default_analyzer, columns_to_index, analyzer_index_settings=None):
-    '''
-    Generate the dictionnary with ES syntax to pass for index creation.
+    '''Generate the to pass to Elasticsearch for index creation.
     
-    INPUT:
-        - default_analyzer: the analyzer that will be used on all fields mentioned
-            in columns_to_index no matter what
-        - columns_to_index: the analyzers to use for each column
-        - analyzer_index_settings: (optional) Elasticsearch settings if to define custom 
-                    analyzers if any are used. See Elasticsearch documentation 
-                    on how to create custom analyzers
+    Parameters
+    ----------
+    default_analyzer: str
+        The analyzer that will be used on all fields mentioned in 
+        `columns_to_index` in all cases.
+    columns_to_index: dict 
+        Keys are the columns to index and values are the Elasticsearch 
+        analyzers to use for the corresponding column (in addition to the 
+        default analyzer).
+            
+        Ex: {'col1': {'analyzerA', 'analyzerB'}, 
+             'col2': {}, 
+             'col3': 'analyzerB'}
+    analyzer_index_settings: dict or None
+        Elasticsearch settings to define custom analyzers if any are used. 
+        See Elasticsearch documentation on how to create custom analyzers.
+        
+    Returns
+    -------
+    index_settings: dict
+        The dict representation of a JSON that can be passed to Elasticsearch
+        to create the index corresponding to input.
     '''
     # 
     if analyzer_index_settings is not None:
@@ -292,18 +371,21 @@ def gen_index_settings(default_analyzer, columns_to_index, analyzer_index_settin
 
 
 def _key_val_er(dict_):
-    '''To solve problem with keys having to be strings in json'''
+    '''Format a dict as a list to make it JSON serializable.
+    
+    This deals with dictionnaries for which the type of keys are not valid as 
+    json keys but are valid as values. The result is a JSON serializable list.
+    This operation can be reversed with `_un_key_val_er`.
+    '''
     return [{'__KEY__': key, '__VAL__': value} for key, value in dict_.items()]
 
 def _un_key_val_er(list_):
+    '''Re-creates the original dict from a list created by `_key_val_er`'''
+    
     def _list_to_tuple(x):
         if isinstance(x, list):
             return tuple(x)
         else:
             return x
-    
-    try:
-        return {_list_to_tuple(dict_['__KEY__']): dict_['__VAL__'] for dict_ in list_}
-    except:
-        import pdb; pdb.set_trace()
+    return {_list_to_tuple(dict_['__KEY__']): dict_['__VAL__'] for dict_ in list_}
     
