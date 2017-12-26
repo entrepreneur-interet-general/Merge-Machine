@@ -57,6 +57,7 @@ def write_keep_syn(name_alt_gen, file_path_keep, file_path_syn):
     with open(file_path_syn, 'w') as w_syn, \
          open(file_path_keep, 'w') as w_keep:
         for name, alternates in name_alt_gen:
+            alternates = [y for y in [x.strip() for x in alternates] if y]
             # sea biscuit, sea biscit => seabiscuit
             if name in alternates:
                 alternates = set(alternates)
