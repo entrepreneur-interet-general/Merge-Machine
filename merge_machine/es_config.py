@@ -11,7 +11,7 @@ from .helpers import _gen_index_settings_from_analyzers
 
 # List of dict objects defining analyzers
 from .analyzers import case_insensitive_keyword, integers, n_grams
-from .analyzers_resource import city
+from .analyzers_resource import city, country
 
 # Default analyzer (for non-matching columns)
 DEFAULT_ANALYZER = 'case_insensitive_keyword'

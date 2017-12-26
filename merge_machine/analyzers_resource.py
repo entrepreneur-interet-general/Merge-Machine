@@ -179,8 +179,8 @@ city = {
 # each country).
 # =============================================================================
         
-country_keep_file_path = 'es_country_keep.txt'
-country_syn_file_path = 'es_country_synonyms.txt'        
+country_keep_file_path = 'countries_keep.txt'
+country_syn_file_path = 'countries_synonyms.txt'
         
 country = {
      'tokenizer': {
