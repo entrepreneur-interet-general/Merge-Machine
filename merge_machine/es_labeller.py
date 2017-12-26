@@ -659,6 +659,7 @@ class Labeller():
                  }
     
     MAX_NUM_LEVELS = 3 # Number of match clauses
+    MIN_NUM_QUERIES = 9 # Minimum number of queries to try out
     BOOL_LEVELS = {'.integers': ['must', 'should'], 
                    '.city': ['must', 'should']}
     BOOST_LEVELS = [1]
@@ -748,6 +749,7 @@ class Labeller():
         self.must_not_filters = must_not
            
         self._init_queries(match_cols, columns_to_index) # creates self.current_queries
+        self.MIN_NUM_QUERIES = min(self.MIN_NUM_QUERIES, len(self.current_queries)) 
         self._init_core_queries(match_cols, columns_to_index) # creates self.single_core_queries
         #self._init_history() # creates self.history
         
@@ -770,8 +772,8 @@ class Labeller():
 
     def _sanity_check(self):
         """Make sure you are not crazy. Run this after updates in dev."""
-        
         return
+    
         # Labels
         if self.status == 'ACTIVE':
             assert len(self.labelled_pairs) \
@@ -1799,7 +1801,7 @@ class Labeller():
         """
         def wrapper(self, *args, **kwargs):
             l1 = len(self.current_queries)
-            res = func(self)
+            res = func(self, *args, **kwargs)
             l2 = len(self.current_queries)
             
             if l2 > l1:
@@ -1860,8 +1862,8 @@ class Labeller():
         return wrapper
     
     @print_name
-    @_query_counter_wrapper   
     @_log_wrapper
+    @_query_counter_wrapper   
     def filter_by_extended_core(self):
         """Keep the best of each query template for all distinct extended_cores.
         
@@ -1943,8 +1945,8 @@ class Labeller():
 
 
     @print_name
-    @_query_counter_wrapper    
     @_log_wrapper
+    @_query_counter_wrapper   
     def filter_by_core(self):
         """Restrict each individual current query to their essential core 
         queries. 
@@ -1959,11 +1961,10 @@ class Labeller():
         self.current_queries = [x for x in self.current_queries if x is not None]
     
     @print_name
-    @_query_counter_wrapper
     @_log_wrapper
+    @_query_counter_wrapper   
     def filter_by_precision(self):
         """Filter current_queries based on their precision."""
-        MIN_NUM_QUERIES = 9 # Always leave at least 9 queries
         MIN_PRECISION_TAB = [(20, 0.7), (10, 0.5), (5, 0.3)]
         def _min_precision(self):
             """
@@ -1982,18 +1983,16 @@ class Labeller():
         
         indices_to_keep = [i for i, x in enumerate(self.current_queries) \
                                if x.precision >= _min_precision(self)]
-        indices_to_keep += sorted_indices[len(indices_to_keep): MIN_NUM_QUERIES]
+        indices_to_keep += sorted_indices[len(indices_to_keep): self.MIN_NUM_QUERIES]
         
         # Complex maneuver to avoid copying self.current_queries #TODO: change this ?
         self.current_queries = [x for i, x in enumerate(self.current_queries) \
                                 if i in indices_to_keep]
         
-        assert len(self.current_queries) >= MIN_NUM_QUERIES
-
    
     @print_name
-    @_query_counter_wrapper
     @_log_wrapper
+    @_query_counter_wrapper   
     def filter_by_num_keys(self):
         """Keep only the best queries.
         
@@ -2018,8 +2017,8 @@ class Labeller():
         self.current_queries = self.current_queries[:_max_num_queries(self)]
 
     @print_name   
-    @_query_counter_wrapper
     @_log_wrapper
+    @_query_counter_wrapper   
     def expand_by_core(self):
         """Add queries to current_queries by adding fields to current_queries."""
         print('EXPANDING BY CORE')
@@ -2035,8 +2034,8 @@ class Labeller():
         self.filter_()
 
     @print_name    
-    @_query_counter_wrapper    
     @_log_wrapper
+    @_query_counter_wrapper   
     def expand_by_boost(self):
         """Add queries to current_queries by varying boost levels."""
         print('EXPANDING BY BOOST')        
