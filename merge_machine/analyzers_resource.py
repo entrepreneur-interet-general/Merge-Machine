@@ -129,7 +129,7 @@ city = {
      'tokenizer': {
                  "city_standard": { #standard-ish except for "-"
                         "type": "pattern",
-                        "pattern": '|'.join(["\'", '\"', '\(', '\)', '_', ',', '\.', ';'])
+                        "pattern": '|'.join(["\'", '\"', '\(', '\)', '_', ',', '\.', ';', ' '])
                     }
              },  
         
@@ -186,7 +186,7 @@ country = {
      'tokenizer': {
                  "country_standard": { #standard-ish except for "-"
                         "type": "pattern",
-                        "pattern": '|'.join(["\'", '\"', '\(', '\)', '_', ',', '\.', ';'])
+                        "pattern": '|'.join(["\'", '\"', '\(', '\)', '_', ',', '\.', ';', ' '])
                     }
              },  
         
