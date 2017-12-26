@@ -17,7 +17,7 @@ from .analyzers_resource import city
 DEFAULT_ANALYZER = 'case_insensitive_keyword'
 
 # Default analyzers (for columns that should match)
-DEFAULT_CUSTOM_ANALYZERS = {'case_insensitive_keyword', 'city', 'integers', 'n_grams'}
+DEFAULT_CUSTOM_ANALYZERS = {'case_insensitive_keyword', 'city', 'country', 'integers', 'n_grams'}
 DEFAULT_STOCK_ANALYZERS = {'french'}
 DEFAULT_ANALYZERS = DEFAULT_CUSTOM_ANALYZERS | DEFAULT_STOCK_ANALYZERS
 

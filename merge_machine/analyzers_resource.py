@@ -117,7 +117,7 @@ Custom analyzers for Elasticsearch requiring processing of external resources.
 # CITY ANALYZER
 # The city analyzer is a cateforical analyzer to find mentions of a city 
 # regardless of the language.
-# The city analyzers filters down the tokenized text to tokens matching
+# The city analyzer filters down the tokenized text to tokens matching
 # a fixed list of known cities in various languages and then translates the city
 # name to a fixed language (may be different for each city).
 # =============================================================================
@@ -165,6 +165,62 @@ city = {
              'city': {
                         "tokenizer": "city_standard", # TODO: problem with spaces in words
                         "filter": ["city_keep", "city_synonym", "city_length"] # TODO: shingle ?
+                    }
+             } 
+     }
+
+# =============================================================================
+# COUNTRY ANALYZER
+# The country analyzer is a cateforical analyzer to find mentions of a country 
+# regardless of the language or common abbreviations.
+# The country analyzer filters down the tokenized text to tokens matching
+# a fixed list of known countries in various languages and abbreviations and 
+# then translates the country name to a fixed language (may be different for 
+# each country).
+# =============================================================================
+        
+country_keep_file_path = 'es_country_keep.txt'
+country_syn_file_path = 'es_country_synonyms.txt'        
+        
+country = {
+     'tokenizer': {
+                 "country_standard": { #standard-ish except for "-"
+                        "type": "pattern",
+                        "pattern": '|'.join(["\'", '\"', '\(', '\)', '_', ',', '\.', ';'])
+                    }
+             },  
+        
+     'filter': {
+                    "country_keep" : {
+                        "type" : "keep",
+                        "keep_words_case": True, # Lower the words
+                        "keep_words_path" : country_keep_file_path
+                    },
+                            
+                    "country_stop":{
+                        "type" : "stop",
+                        "ignore_case": True,
+                        "stopwords_path": country_keep_file_path      
+                    },
+                      
+                    "country_synonym" : {
+                        "type" : "synonym", 
+                        "expand": False,    
+                        "ignore_case": True,
+                        "synonyms_path" : country_syn_file_path,
+                        "tokenizer" : "country_standard"  # TODO: whitespace? 
+                    },
+                            
+                    "country_length": {
+                        "type" : "length",
+                        "min": 4
+                    }  
+                },
+     
+     'analyzer': {
+             'country': {
+                        "tokenizer": "country_standard", # TODO: problem with spaces in words
+                        "filter": ["country_keep", "country_synonym", "country_length"] # TODO: shingle ?
                     }
              } 
      }
