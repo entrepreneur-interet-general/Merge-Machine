@@ -37,7 +37,7 @@ def _is_match(resp, thresh):
 def _has_hits(resp):
     return bool(resp['hits']['hits'])
 
-def _first_match(list_of_responses, list_of_thresholds):
+def _best_match(list_of_responses, list_of_thresholds):
     '''Return the first real match (above threshold) and if not return the first 
     non empty result if possible. 
     
@@ -54,14 +54,32 @@ def _first_match(list_of_responses, list_of_thresholds):
         if _has_hits(resp):
             return i, resp
     return 0, list_of_responses[0]
-            
+
+def _confidence_estimator(res_of_bulk_search, num_queries, estimator='median'):
+    """Look at all results in res_of bulk search apply the estimator (median or
+    mean to the confidence associated to each query templpate).
+    
+    This function is used to scale Elasticsearch confidence scores as their 
+    signification varies according to queries.
+    """
+    
+    res_of_bulk_search = [res_of_bulk_search[i] for i in range(len(res_of_bulk_search))] # Don't use items to preserve order
+    
+    n_r_s = int(len(res_of_bulk_search) / num_queries) # num_rows_source
+    
+    results = []
+    for i in range(num_queries):
+        scores = [x['_score'] for res in res_of_bulk_search[i*n_r_s:(i+1)*n_r_s] \
+                  for x in res['hits']['hits']]
+        results.append(np.__dict__[estimator](scores))
+    return results
+
 
 def _bulk_search_to_full_response(res_of_bulk_search, list_of_thresholds):
-    '''
-    Takes the output _bulk_search and transforms it to associate a single result
-    per row.
+    """Take the output _bulk_search and transform it to associate a single 
+    result to each row.
     
-    Applies `_first_match` to the list of results for each row. This is meant
+    Applies `_best_match` to the list of results for each row. This is meant
     to be used in es_linker.
     
     
@@ -78,17 +96,17 @@ def _bulk_search_to_full_response(res_of_bulk_search, list_of_thresholds):
     new_full_responses: list of Elasticsearch responses
         List of responses with the best response for each row, with the same 
         number of items as original rows.
-    '''
+    """
     
     num_rows_source = int(len(res_of_bulk_search) / len(list_of_thresholds))
     assert len(res_of_bulk_search) % num_rows_source == 0
     
     res_of_bulk_search = [res_of_bulk_search[i] for i in range(len(res_of_bulk_search))] # Don't use items to preserve order
-    return [_first_match(res_of_bulk_search[n::num_rows_source], list_of_thresholds) \
+    return [_best_match(res_of_bulk_search[n::num_rows_source], list_of_thresholds) \
                       for n in range(0, num_rows_source)]
 
 def es_linker(es, source, params):
-    '''Link source to reference following instructions in params and return the
+    """Link source to reference following instructions in params and return the
     concatenation of source and reference with the matches found.
     
     Parameters
@@ -118,11 +136,31 @@ def es_linker(es, source, params):
     new_source: instance of `pandas.DataFrame`
         The result of matching. A DataFrame with the same number of rows as 
         `source` which is the concatenation of `source` and of the matches found 
-        in the reference table.
-    '''
+        in the reference table (columns with suffix: '__REF').
+        
+        In addition to matching the following columns are created:
+            __IS_MATCH: bool
+                Weather or not the result is thought to be a match (the score
+                is above the threshold)
+            __ID_REF: str
+                The document ID of the reference row in the Elasticsearch index
+            __ID_QUERY: int
+                The place of the query that was used to generate the match in 
+                `params['queries']`. The query is chosen using `_best_match`
+            __ES_SCORE: float
+                The Elascticsearch score returned for the chosen query.
+            __THRESH: float
+                The threshold associated to the chosen query
+            __CONFIDENCE: float
+                A score meant to be uniform accross queries. It is computed as 
+                follows:
+                    scaled_conf = 1 + (conf_q - thresh_q) / mean(all_conf_q)
+                A scaled score above 1 indicates a probable match.
+            
+    """
     
     index_name = params['index_name']
-    queries = params['queries'] # queries is {'template': ..., 'threshold':...}
+    queries = params['queries'][:9] # queries is {'template': ..., 'threshold':...} / Max 9 queries
     must_filters = params.get('must', {})
     must_not_filters = params.get('must_not', {})
     exact_pairs = params.get('exact_pairs', [])
@@ -138,6 +176,9 @@ def es_linker(es, source, params):
         
         all_search_templates, res_of_bulk_search = _bulk_search(es, index_name, 
                     [q['template'] for q in queries], rows, must_filters, must_not_filters, num_results=1)
+        
+        confidence_means = _confidence_estimator(res_of_bulk_search, len(queries), 'mean')
+        
         full_responses = _bulk_search_to_full_response(res_of_bulk_search, [q['thresh'] for q in queries])
         del res_of_bulk_search
 
@@ -156,14 +197,23 @@ def es_linker(es, source, params):
                                 else np.nan \
                                 for _, resp in full_responses], index=matches_in_ref.index)
         
+        query_index = pd.Series([i for i, resp in full_responses], 
+                                index=matches_in_ref.index)
+        
         threshold = pd.Series([queries[i]['thresh'] \
                                 for i, _ in full_responses], index=matches_in_ref.index)
+
+        scaled_confidence = 1 + (confidence - threshold) \
+                            / query_index.apply(lambda idx: confidence_means[idx])
 
         matches_in_ref.columns = [x + '__REF' for x in matches_in_ref.columns]
         matches_in_ref['__IS_MATCH'] = confidence >= threshold
         matches_in_ref['__ID_REF'] = ref_id
-        matches_in_ref['__CONFIDENCE'] = confidence    
+        matches_in_ref['__ID_QUERY'] = query_index
+        matches_in_ref['__ES_SCORE'] = confidence
         matches_in_ref['__THRESH'] = threshold
+        matches_in_ref['__CONFIDENCE'] = scaled_confidence
+
         
         # TODO: confidence_gap makes no sense with multiple queries
         #        confidence_gap = pd.Series([resp['hits']['hits'][0]['_score'] - resp['hits']['hits'][1]['_score']
@@ -175,7 +225,8 @@ def es_linker(es, source, params):
         
         # Put confidence to zero for user labelled negative pairs
         sel = [x in non_matching_pairs for x in zip(source_indices, matches_in_ref.__ID_REF)]
-        for col in ['__CONFIDENCE']: #, '__GAP', '__GAP_RATIO']:
+        for col in ['__ES_SCORE']: #, '__GAP', '__GAP_RATIO']:
+            matches_in_ref.loc[sel, '__ES_SCORE'] = 0
             matches_in_ref.loc[sel, '__CONFIDENCE'] = 0
         
     else:
@@ -188,6 +239,7 @@ def es_linker(es, source, params):
                                             index=exact_source_indices)
         exact_matches_in_ref.columns = [x + '__REF' for x in exact_matches_in_ref.columns]
         exact_matches_in_ref['__ID_REF'] = exact_ref_indices
+        exact_matches_in_ref['__ES_SCORE'] = 999
         exact_matches_in_ref['__CONFIDENCE'] = 999
         
     else:
