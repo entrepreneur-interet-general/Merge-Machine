@@ -2,7 +2,7 @@
 
 ## What does it do ?
 
-A python3 library to link a dirty CSV file with a clean reference table. It is meant to as generic as possible and includes a labeller to learn optimal parameters for a usecase.
+A python3 library to link a dirty CSV file with a clean reference table. It is meant to as generic as possible and includes a labeller to learn optimal parameters for each matching scenario.
 
 
 ## How to install ?
@@ -19,7 +19,7 @@ This library relies on Elasticsearch. We recommend using the last version availa
 pip3 install merge-machine
 ```
 
-Or for the bleeding edge version:
+From source (recommended, for the meantime...):
 ```
 git clone https://github.com/entrepreneur-interet-general/Merge-Machine.git
 cd Merge-Machine
