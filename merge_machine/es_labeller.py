@@ -1178,7 +1178,7 @@ class Labeller():
                     print('WARNING: no results found for this row; skipping')
                     self._update_row_count(True, False) # TODO: not tested! 
         else:
-            self.status = 'NO_'
+            self.status = 'NO_MATCHES'
             raise StopIteration('Could not find any resut in {0} consecutive rows'.format(NUM_ROW_TRIES))
         
     def _bulk_search(self, queries_to_perform, row, num_results):
