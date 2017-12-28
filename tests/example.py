@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import json
-
 from elasticsearch import Elasticsearch, client
 import pandas as pd
 

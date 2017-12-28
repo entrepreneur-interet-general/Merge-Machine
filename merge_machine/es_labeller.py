@@ -146,8 +146,6 @@ def _gen_all_query_template_tuples(match_cols, columns_to_index, bool_levels,
 # =============================================================================
 # Labeller Classes
 # =============================================================================
-
-     
         
 class LabellerQueryTemplate(CompoundQueryTemplate):
     """
@@ -592,7 +590,7 @@ class CoreScorerQueryTemplate(SingleQueryTemplate):
         
 
 
-class Labeller():
+class BasicLabeller():
     """Object used for interactive learning of optimal queries to match two
     tables.
     
@@ -854,7 +852,8 @@ class Labeller():
         ref_index_name: str
             See doc for `__init__`. 
         dict_: dict        
-            The dictionnary to load the `Labeller` instance from.
+            The dictionnary to load the `Labeller` instance from (result of
+            `to_dict`).
         """        
         labeller = cls(es, source, ref_index_name, dict_['match_cols'], 
                                                 dict_['columns_to_index'], 
@@ -929,7 +928,8 @@ class Labeller():
         ref_index_name: str
             See doc for `__init__`. 
         dict_: dict        
-            The dictionnary to load the `Labeller` instance from.
+            The dictionnary to load the `Labeller` instance from (result
+            of `to_json`).
         """
         with open(file_path) as f:
             dict_ = json.load(f)
@@ -993,106 +993,7 @@ class Labeller():
                             self.current_source_item, self.NUM_RESULTS)
             self.add_results(results)   
 
-    def add_custom_search(self, search_params, max_num_results=10):
-        """Search for specific items in reference using Elasticsearch.
-        
-        The items in `col_to_search` are searched for in the indexed defined by 
-        `ref_index_name` and results of the query are added in front of 
-        `ref_gen` so as to be proposed as matches before returning to the matches
-        proposed using `current_queries`.
-        
-        This method allows the user to create custom searches on specific words 
-        (rather than searching for entire rows of `current_source_item`). This 
-        can be useful in two cases: 1) The user is using the labeller to label 
-        the entire file by hand; this can help find a match. 2) The labeller
-        is having trouble focusing at the beginning of the training; this can 
-        help speed up the process for the first few steps.
-        
-        Parameters
-        ----------
-        search_params: dict 
-            The values to search for in each columns.
-            Ex: {col1: [val1, val2], col4: [val3]}
-        max_num_results: int
-            The maximum number of results to append for a search.
-        """
-        DEFAULT_SEARCH_ANALYZER = '.french'
-        query_template = [('must', key, key, DEFAULT_SEARCH_ANALYZER, 1) for key in search_params]
-        
-        row = dict()
-        for key, value in search_params.items():
-            if isinstance(key, str):
-                row[key] = value
-            else:
-                for i, k in enumerate(key):
-                    if i == 0:
-                        row[k] = ' '.join(value)
-                    else:
-                        row[k] = None
-        
-        body = _gen_body(query_template, row, num_results=max_num_results) # TODO: add global filters ?
-        
-        print(query_template)
-        print(search_params)
-        print(body)
-        # Remove previous results of search
-        self.clear_custom_search()
-        
-        res = self.es.search(self.ref_index_name, body=body)['hits']['hits']
-        
-        print(res)
-        print('Len res:', len(res))
-        
-        if res:
-            def temp(og_elem, og_ranking, og_query):
-                for x in res:
-                    # Use this for user_filtered queries
-                    self.current_query_ranking = -1
-                    self.current_query = None
-                    
-                    if (self.current_source_idx, x['_id']) not in self.labelled_pairs:
-                        yield (x['_id'], x['_source'], x['_score'])
-                    
-                self.current_query_ranking = og_ranking
-                self.current_query = og_query
-                
-                yield og_elem
-                
-            og_elem = (self.current_ref_idx, self.current_ref_item, self.current_es_score)   
-            og_ranking = self.current_query_ranking
-            og_query = self.current_query
-            
-            self.ref_gen = itertools.chain(temp(og_elem, og_ranking, og_query), 
-                                           self.ref_gen)
-            
-            # Change current proposal
-            (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
-        
-    def clear_custom_search(self):
-        """Remove the elements that were generated by a user search (identified
-        by self.current_query_ranking == -1).
-        """
-        if self.current_query_ranking == -1:
-            
-            for _ in range(10**6): # Avoiding while True
-                try:
-                    first_elem = next(self.ref_gen)
-                except StopIteration:
-                    def temp():
-                        raise StopIteration
-                    self.ref_gen = temp()
-                    break
-                    
-                if self.current_query_ranking != -1:
-                    self.ref_gen = itertools.chain([first_elem], self.ref_gen)
-                    break
-            else:
-                raise RuntimeError('All elements of ref_gen have ' \
-                                   'current_query_ranking at -1. This is wrong!')
 
-            # Change current proposal
-            (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
-    
     def _is_exact_match(self, source_item, ref_item):
         """Check if match is considered exact between two items on columns used
         for matching.
@@ -2158,7 +2059,114 @@ class Labeller():
         return dict_to_emit
     
     
-class ConsoleLabeller(Labeller):
+class SearchLabeller(BasicLabeller):
+    """
+    Extends the BasicLabeller class by providing tools for custom search
+    """
+    
+    def add_custom_search(self, search_params, max_num_results=10):
+        """Search for specific items in reference using Elasticsearch.
+        
+        The items in `col_to_search` are searched for in the indexed defined by 
+        `ref_index_name` and results of the query are added in front of 
+        `ref_gen` so as to be proposed as matches before returning to the matches
+        proposed using `current_queries`.
+        
+        This method allows the user to create custom searches on specific words 
+        (rather than searching for entire rows of `current_source_item`). This 
+        can be useful in two cases: 1) The user is using the labeller to label 
+        the entire file by hand; this can help find a match. 2) The labeller
+        is having trouble focusing at the beginning of the training; this can 
+        help speed up the process for the first few steps.
+        
+        Parameters
+        ----------
+        search_params: dict 
+            The values to search for in each columns.
+            Ex: {col1: [val1, val2], col4: [val3]}
+        max_num_results: int
+            The maximum number of results to append for a search.
+        """
+        DEFAULT_SEARCH_ANALYZER = '.french'
+        query_template = [('must', key, key, DEFAULT_SEARCH_ANALYZER, 1) for key in search_params]
+        
+        row = dict()
+        for key, value in search_params.items():
+            if isinstance(key, str):
+                row[key] = value
+            else:
+                for i, k in enumerate(key):
+                    if i == 0:
+                        row[k] = ' '.join(value)
+                    else:
+                        row[k] = None
+        
+        body = _gen_body(query_template, row, num_results=max_num_results) # TODO: add global filters ?
+        
+        print(query_template)
+        print(search_params)
+        print(body)
+        # Remove previous results of search
+        self.clear_custom_search()
+        
+        res = self.es.search(self.ref_index_name, body=body)['hits']['hits']
+        
+        print(res)
+        print('Len res:', len(res))
+        
+        if res:
+            def temp(og_elem, og_ranking, og_query):
+                for x in res:
+                    # Use this for user_filtered queries
+                    self.current_query_ranking = -1
+                    self.current_query = None
+                    
+                    if (self.current_source_idx, x['_id']) not in self.labelled_pairs:
+                        yield (x['_id'], x['_source'], x['_score'])
+                    
+                self.current_query_ranking = og_ranking
+                self.current_query = og_query
+                
+                yield og_elem
+                
+            og_elem = (self.current_ref_idx, self.current_ref_item, self.current_es_score)   
+            og_ranking = self.current_query_ranking
+            og_query = self.current_query
+            
+            self.ref_gen = itertools.chain(temp(og_elem, og_ranking, og_query), 
+                                           self.ref_gen)
+            
+            # Change current proposal
+            (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
+        
+    def clear_custom_search(self):
+        """Remove the elements that were generated by a user search (identified
+        by self.current_query_ranking == -1).
+        """
+        if self.current_query_ranking == -1:
+            
+            for _ in range(10**6): # Avoiding while True
+                try:
+                    first_elem = next(self.ref_gen)
+                except StopIteration:
+                    def temp():
+                        raise StopIteration
+                    self.ref_gen = temp()
+                    break
+                    
+                if self.current_query_ranking != -1:
+                    self.ref_gen = itertools.chain([first_elem], self.ref_gen)
+                    break
+            else:
+                raise RuntimeError('All elements of ref_gen have ' \
+                                   'current_query_ranking at -1. This is wrong!')
+
+            # Change current proposal
+            (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
+    
+
+    
+class ConsoleLabeller(BasicLabeller):
     """
     Wrapper around the labeller class for convenient use in the console.    
     """
