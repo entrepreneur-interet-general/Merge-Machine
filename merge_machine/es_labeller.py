@@ -19,7 +19,6 @@ import copy
 import itertools
 import json
 import logging
-import pickle
 import random
 
 from elasticsearch import client
@@ -2068,8 +2067,38 @@ class BasicLabeller():
     
 class SearchLabeller(BasicLabeller):
     """
-    Extends the BasicLabeller class by providing tools for custom search
+    Extends the BasicLabeller class by providing tools for custom search.
     """
+
+    def to_dict(self):
+        """Returns a dict representation of the instance."""
+        custom_searches = self._extract_custom_search()
+        if custom_searches:
+            x = custom_searches[0]
+            self._add_searches([{'_id': x[0], '_source': x[1], '_score': x[2]}], replace_current=True)
+        dict_= super().to_dict()
+        dict_['custom_search_ref_gen'] = custom_searches[1:]
+        return dict_
+    
+    @classmethod
+    def from_dict(cls, es, source, ref_index_name, dict_):
+        """Returns an instance of the class using a representation generated 
+        by to_dict.
+        """
+        sl = super(SearchLabeller, cls).from_dict(es, source, ref_index_name, dict_)
+        
+        res = [{'_id': x[0], '_source': x[1], '_score': x[2]} \
+                   for x in dict_['custom_search_ref_gen']]
+        
+        # Add searches and replace the current top
+        if res: 
+            assert sl.current_query_ranking == -1
+            sl._add_searches(res, replace_current=False)
+        
+        print('query ranking', sl.current_query_ranking)
+        
+        print(sl.to_emit())
+        return sl    
     
     def add_custom_search(self, search_params, max_num_results=10):
         """Search for specific items in reference using Elasticsearch.
@@ -2089,7 +2118,7 @@ class SearchLabeller(BasicLabeller):
         Parameters
         ----------
         search_params: dict 
-            The values to search for in each columns.
+            The values to search for in each columns of the referential.
             Ex: {col1: [val1, val2], col4: [val3]}
         max_num_results: int
             The maximum number of results to append for a search.
@@ -2099,8 +2128,10 @@ class SearchLabeller(BasicLabeller):
         
         row = dict()
         for key, value in search_params.items():
+            if isinstance(value, str):
+                value = [value]
             if isinstance(key, str):
-                row[key] = value
+                row[key] = ' '.join(value)
             else:
                 for i, k in enumerate(key):
                     if i == 0:
@@ -2111,6 +2142,7 @@ class SearchLabeller(BasicLabeller):
         body = _gen_body(query_template, row, num_results=max_num_results) # TODO: add global filters ?
         
         print(query_template)
+        print(row)
         print(search_params)
         print(body)
         # Remove previous results of search
@@ -2121,6 +2153,12 @@ class SearchLabeller(BasicLabeller):
         print(res)
         print('Len res:', len(res))
         
+        self._add_searches(res, replace_current=True)
+        
+    def _add_searches(self, res, replace_current):
+        """Update the state of the labeller, prepending to `ref_gen` and setting
+        the proper values for current states.
+        """
         if res:
             def temp(og_elem, og_ranking, og_query):
                 for x in res:
@@ -2130,11 +2168,11 @@ class SearchLabeller(BasicLabeller):
                     
                     if (self.current_source_idx, x['_id']) not in self.labelled_pairs:
                         yield (x['_id'], x['_source'], x['_score'])
-                    
-                self.current_query_ranking = og_ranking
-                self.current_query = og_query
                 
-                yield og_elem
+                if replace_current:
+                    self.current_query_ranking = og_ranking
+                    self.current_query = og_query
+                    yield og_elem
                 
             og_elem = (self.current_ref_idx, self.current_ref_item, self.current_es_score)   
             og_ranking = self.current_query_ranking
@@ -2144,36 +2182,60 @@ class SearchLabeller(BasicLabeller):
                                            self.ref_gen)
             
             # Change current proposal
-            (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
-        
+            if replace_current:
+                (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
+    
+
+    
+    def _extract_custom_search(self):
+        """Remove all custom searches from `ref_gen` and return them in a list."""
+
+        custom_search_ref_gen = []
+
+        # Add the current item if appropriate
+        if self.current_query_ranking == -1:
+            custom_search_ref_gen.append((self.current_ref_idx, \
+                                self.current_ref_item, self.current_es_score))
+
+        # Add items still in `ref_gen`
+        for _ in range(10**6): # Avoiding while True
+            try:
+                first_elem = next(self.ref_gen)
+            except StopIteration:
+                def temp():
+                    raise StopIteration
+                    yield
+                self.ref_gen = temp()
+                break
+                
+            if self.current_query_ranking == -1:
+                custom_search_ref_gen.append(first_elem)
+            else:
+                self.ref_gen = itertools.chain([first_elem], self.ref_gen)
+                break
+        else:
+            raise RuntimeError('All elements of ref_gen have ' \
+                               'current_query_ranking at -1. This is wrong!')   
+            
+        return custom_search_ref_gen
+    
     def clear_custom_search(self):
         """Remove the elements that were generated by a user search (identified
         by self.current_query_ranking == -1).
         """
         if self.current_query_ranking == -1:
             
-            for _ in range(10**6): # Avoiding while True
-                try:
-                    first_elem = next(self.ref_gen)
-                except StopIteration:
-                    def temp():
-                        raise StopIteration
-                    self.ref_gen = temp()
-                    break
-                    
-                if self.current_query_ranking != -1:
-                    self.ref_gen = itertools.chain([first_elem], self.ref_gen)
-                    break
-            else:
-                raise RuntimeError('All elements of ref_gen have ' \
-                                   'current_query_ranking at -1. This is wrong!')
+            self._extract_custom_search()
 
             # Change current proposal
             (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
     
 
+class Labeller(SearchLabeller):
+    '''Keep this for compatibility.'''
+    pass
     
-class ConsoleLabeller(BasicLabeller):
+class ConsoleLabeller(Labeller):
     """
     Wrapper around the labeller class for convenient use in the console.    
     """
