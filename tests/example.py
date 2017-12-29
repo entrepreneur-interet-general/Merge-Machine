@@ -205,6 +205,7 @@ for (i, row) in new_source.iloc[:20].iterrows():
         for col in match['ref']:
             print(col, '->', row[col + '__REF'])
         print('\n')
+    print('^ is match: {0}; confidence: {1}'.format(row['__IS_MATCH'], row['__CONFIDENCE']))
 
 
 

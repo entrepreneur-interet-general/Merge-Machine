@@ -122,8 +122,8 @@ Custom analyzers for Elasticsearch requiring processing of external resources.
 # name to a fixed language (may be different for each city).
 # =============================================================================
         
-city_keep_file_path = 'es_city_keep.txt'
-city_syn_file_path = 'es_city_synonyms.txt'        
+city_keep_file_path = 'city_keep.txt'
+city_syn_file_path = 'city_synonyms.txt'        
         
 city = {
      'tokenizer': {
@@ -163,8 +163,8 @@ city = {
      
      'analyzer': {
              'city': {
-                        "tokenizer": "city_standard", # TODO: problem with spaces in words
-                        "filter": ["city_keep", "city_synonym", "city_length"] # TODO: shingle ?
+                        "tokenizer": "standard", # TODO: problem with spaces in words
+                        "filter": ["asciifolding", "shingle", "city_length", "city_keep", "city_synonym"] # TODO: shingle ?
                     }
              } 
      }
@@ -191,6 +191,12 @@ country = {
              },  
         
      'filter': {
+                    # Not Using default because of bug: https://github.com/elastic/elasticsearch/issues/25555
+                    "my_shingle": {
+                        	"type": "shingle",
+                          "token_separator": "_"
+                    },           
+             
                     "country_keep" : {
                         "type" : "keep",
                         "keep_words_case": True, # Lower the words
@@ -207,8 +213,8 @@ country = {
                         "type" : "synonym", 
                         "expand": False,    
                         "ignore_case": True,
-                        "synonyms_path" : country_syn_file_path,
-                        "tokenizer" : "country_standard"  # TODO: whitespace? 
+                        "synonyms_path" : country_syn_file_path#,
+                        #"tokenizer" : "standard"  # TODO: whitespace? 
                     },
                             
                     "country_length": {
@@ -219,8 +225,8 @@ country = {
      
      'analyzer': {
              'country': {
-                        "tokenizer": "country_standard", # TODO: problem with spaces in words
-                        "filter": ["country_keep", "country_synonym", "country_length"] # TODO: shingle ?
+                        "tokenizer": "standard", # TODO: problem with spaces in words
+                        "filter": ["asciifolding", "my_shingle", "country_keep", "country_synonym"] # TODO: shingle ?
                     }
              } 
      }
