@@ -763,7 +763,7 @@ class Labeller():
         
         self.current_es_score = None
 
-        self.status = 'ACTIVE' # 'ACTIVE', 'NO_ITEMS_TO_LABEL', 'NO_QUERIES'
+        self.status = 'ACTIVE' # 'ACTIVE', 'NO_ITEMS_TO_LABEL', 'NO_QUERIES', 'NO_MATCHES'
 
         if next_row:
             self._next_row()
@@ -1179,8 +1179,8 @@ class Labeller():
                     self._update_row_count(True, False) # TODO: not tested! 
         else:
             self.status = 'NO_MATCHES'
-            raise StopIteration('Could not find any resut in {0} consecutive rows'.format(NUM_ROW_TRIES))
-        
+            logging.warning('Could not find any resut in {0} consecutive rows'.format(NUM_ROW_TRIES))
+
     def _bulk_search(self, queries_to_perform, row, num_results):
         """Perform bulk searches using Elasticsearch (wrapper around 
         helpers._bulk_search
@@ -1701,10 +1701,16 @@ class Labeller():
             Whether or not to filter and expand queries while adding labels. 
             If not, only the original queries will be kept.
         """
+        
+        if (not learn) and (not self.current_queries):
+            self.status = 'NO_QUERIES'
+            logging.warning('Cannot re-score history: NO_QUERIES')
+            return
 
         # Do not re-score if no labels
         if (not self.num_positive_rows_labelled) or (not self.num_positive_rows_labelled[-1]):
-            print('WARNING: No labels for re-scoring')
+            self.status = 'NO_ITEMS_TO_LABEL'
+            logging.warning('Cannot re-score history: NO_ITEMS_TO_LABEL')
             return
             
             
@@ -2084,6 +2090,7 @@ class Labeller():
         self.must_filters = must_filters
         self.must_not_filters = must_not_filters
         
+        self.status = 'ACTIVE' # If not 'ACTIVE' this will be fixed in _next_row
         self._re_score_history(call_next_row=True)
         self._sanity_check()
     
@@ -2101,7 +2108,7 @@ class Labeller():
         """Creates a dict to be sent to the template."""#TODO: fix this
         dict_to_emit = dict()
         
-        # Status (ACTIVE, NO_ITEMS_TO_LABEL, NO_QUERIES)
+        # Status
         dict_to_emit['status'] = self.status
 
         # Info on labeller
@@ -2266,8 +2273,9 @@ class ConsoleLabeller(Labeller):
             if self.status == 'ACTIVE':
                 self.display_pair()
             else:
-                print('>>> Cannot display any pairs. You can still update filters.' \
-                      ' Type "quit" to exit labeller.')
+                print('>>> Labelling is not possible. Status is: {0}\n'.format(self.status) \
+                      + 'You can still update filters (=f).' \
+                        ' Type "quit" to exit labeller.')
             
         elif self.current_tab == 'menu':
             self.display_menu()
