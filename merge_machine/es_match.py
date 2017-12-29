@@ -134,7 +134,7 @@ def _deduplicate(tab, columns, min_diff_prop=0):
     
     small_tab = pd.DataFrame(columns=tab.columns)
 
-    grp = tab.groupby(columns)
+    grp = tab.fillna('').groupby(columns)
     print('Len og_tab: {0}; Len deduped: {1}'.format(len(tab), len(grp)))
     
     if len(grp) >= len(tab) * (1-min_diff_prop):
@@ -156,9 +156,13 @@ def _re_duplicate(tab, small_tab, indices):
     cols = [col for col in small_tab.columns if col not in tab.columns]
     small_tab = small_tab[cols]
     
-    join_col = '__TEMP_JOIN_COL'
-    tab[join_col] = [indices[idx] for idx in tab.index]
-    tab = tab.merge(small_tab, left_on=join_col, right_index=True)
+    join_col = '__SOURCE_GROUP'
+    try:
+        tab[join_col] = [indices[idx] for idx in tab.index]
+        tab = tab.merge(small_tab, left_on=join_col, right_index=True)
+    except:
+        import pdb;
+        pdb.set_trace()
     
     return tab
 
