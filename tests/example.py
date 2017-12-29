@@ -160,7 +160,7 @@ labeller = ConsoleLabeller(es, source, ref_table_name, match_cols, columns_to_in
 # 4. Perform the actual labelling
 # =============================================================================
 
-labeller.console_labeller()
+#labeller.console_labeller()
 
 # =============================================================================
 # 5. Print expected performance

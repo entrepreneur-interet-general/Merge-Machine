@@ -14,20 +14,6 @@ import json
 
 import unidecode
 
-def deduplicate(tab, columns):
-    '''Deduplicated the original table according to its values in `columns`.'''
-    
-    raise NotImplementedError
-    return smaller_tab, indexes
-
-
-def re_duplicate(tab, smaller_tab, columns, indexes):
-    '''Takes the output of `deduplicate` and recreates the table of the original
-    size.
-    '''
-    raise NotImplementedError
-    return original_tab
-
 def _my_unidecode(string):
     '''Unidecode or return empty string.'''
     if isinstance(string, str):

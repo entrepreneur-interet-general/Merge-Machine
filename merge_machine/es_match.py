@@ -105,6 +105,70 @@ def _bulk_search_to_full_response(res_of_bulk_search, list_of_thresholds):
     return [_best_match(res_of_bulk_search[n::num_rows_source], list_of_thresholds) \
                       for n in range(0, num_rows_source)]
 
+
+def _deduplicate(tab, columns, min_diff_prop=0):
+    '''Deduplicated the original table according to its values in `columns`.
+    tab = pd.DataFrame([[1, 2, 3], [1, 2, 4], [2, 3, 4], [1, 2, 5], [2, 3, 6]], columns=['a', 'z', 'e'])
+    
+    Parameters
+    ----------
+    tab: `pd.DataFrame`
+    columns: list
+        The list of columns to deduplicate on.
+    min_diff_prop: float between 0 and 1
+        The minimum relative difference between the sizes of the duplicated and
+        unduplicated tables for which to perform deduplication.
+        
+    Returns
+    -------
+    small_tab: `pd.DataFrame`
+        A table where only the first copy of each duplicate is returned. Index
+        is preserved from the original table.
+    indices: dict
+        For the rows that were left out, assign to the index of the row the 
+        index of the duplicate row that was kept.
+    '''
+    
+    assert 0 <= min_diff_prop <= 1
+    columns = list(set(columns))
+    
+    small_tab = pd.DataFrame(columns=tab.columns)
+
+    grp = tab.groupby(columns)
+    print('Len og_tab: {0}; Len deduped: {1}'.format(len(tab), len(grp)))
+    
+    if len(grp) >= len(tab) * (1-min_diff_prop):
+        return None, None
+        
+    indices = {}
+    for _, grp_tab in grp:
+        small_tab = small_tab.append([grp_tab.iloc[0]])
+        indices.update({idx: grp_tab.index[0] for idx in grp_tab.index})
+    
+    return small_tab, indices
+        
+
+def _re_duplicate(tab, small_tab, indices):
+    '''Takes the output of `deduplicate` and recreates the table of the original
+    size.
+    '''
+    # Restrict the new table to the new columns only
+    cols = [col for col in small_tab.columns if col not in tab.columns]
+    small_tab = small_tab[cols]
+    
+    join_col = '__TEMP_JOIN_COL'
+    tab[join_col] = [indices[idx] for idx in tab.index]
+    tab = tab.merge(small_tab, left_on=join_col, right_index=True)
+    
+    return tab
+
+def _tuplify(obj):
+    """Put a string in a tuple or just return object."""
+    if isinstance(obj, str):
+        return (obj, )
+    else:
+        return obj
+
 def es_linker(es, source, params):
     """Link source to reference following instructions in params and return the
     concatenation of source and reference with the matches found.
@@ -166,13 +230,22 @@ def es_linker(es, source, params):
     exact_pairs = params.get('exact_pairs', [])
     non_matching_pairs = params.get('non_matching_pairs', [])
     
-    exact_source_indices = [x[0] for x in exact_pairs if x[1] is not None if x[0] in source.index]
-    exact_ref_indices = [x[1] for x in exact_pairs if x[1] is not None if x[0] in source.index]
-    source_indices = [x[0] for x in source.iterrows() if x [0] not in exact_source_indices]
+    # Deduplicate source
+    columns_for_dedupe = [col for q in queries for t in q['template'] for col in _tuplify(t[1])] \
+                    + list(must_filters.keys()) + list(must_not_filters.keys())
+    small_source, duplicate_indices = _deduplicate(source, columns_for_dedupe, min_diff_prop=0)
+    if duplicate_indices is None:
+        print('No duplicates found')
+        small_source = source
+        del source
+    
+    exact_source_indices = [x[0] for x in exact_pairs if x[1] is not None if x[0] in small_source.index]
+    exact_ref_indices = [x[1] for x in exact_pairs if x[1] is not None if x[0] in small_source.index]
+    source_indices = [x[0] for x in small_source.iterrows() if x [0] not in exact_source_indices]
     
     # Perform matching on non-exact pairs (not labelled)
     if source_indices:
-        rows = (x[1] for x in source.iterrows() if x[0] in source_indices)
+        rows = (x[1] for x in small_source.iterrows() if x[0] in source_indices)
         
         all_search_templates, res_of_bulk_search = _bulk_search(es, index_name, 
                     [q['template'] for q in queries], rows, must_filters, must_not_filters, num_results=1)
@@ -246,11 +319,13 @@ def es_linker(es, source, params):
         exact_matches_in_ref = pd.DataFrame()
     
     #
-    assert len(exact_matches_in_ref) + len(matches_in_ref) == len(source)
-    new_source = pd.concat([source, pd.concat([matches_in_ref, exact_matches_in_ref])], 1)        
+    assert len(exact_matches_in_ref) + len(matches_in_ref) == len(small_source)
+    new_source = pd.concat([small_source, pd.concat([matches_in_ref, exact_matches_in_ref])], 1)        
     
+    # Re-create original file if necessary
+    if duplicate_indices is not None:
+        return _re_duplicate(source, new_source, duplicate_indices)
     return new_source
-
 
     
 
