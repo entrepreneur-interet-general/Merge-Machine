@@ -231,9 +231,8 @@ def es_linker(es, source, params):
     non_matching_pairs = params.get('non_matching_pairs', [])
     
     # Deduplicate source
-    columns_for_dedupe = [col for q in queries for t in q['template'] for col in _tuplify(t[1])] \
-                    + list(must_filters.keys()) + list(must_not_filters.keys())
-    small_source, duplicate_indices = _deduplicate(source, columns_for_dedupe, min_diff_prop=0)
+    columns_for_dedupe = [col for q in queries for t in q['template'] for col in _tuplify(t[1])]
+    small_source, duplicate_indices = _deduplicate(source, columns_for_dedupe, min_diff_prop=0.1)
     if duplicate_indices is None:
         print('No duplicates found')
         small_source = source
