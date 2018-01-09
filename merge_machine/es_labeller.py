@@ -2028,12 +2028,19 @@ class BasicLabeller():
         # TODO: on  previous, current_query is no longer valid
         dict_to_emit['query_ranking'] = self.current_query_ranking
         if self.current_query_ranking != -1:
+            best_query = self.current_queries[0]
+            dict_to_emit['query'] = best_query._as_tuple()
+            dict_to_emit['estimated_precision'] = best_query.precision # TODO: 
+            dict_to_emit['estimated_recall'] = best_query.recall # TODO: 
+            dict_to_emit['estimated_score'] = best_query.score # TODO:   
+            dict_to_emit['thresh'] = best_query.thresh        
+
             current_query = self.current_query
-            dict_to_emit['query'] = current_query._as_tuple()
-            dict_to_emit['estimated_precision'] = current_query.precision # TODO: 
-            dict_to_emit['estimated_recall'] = current_query.recall # TODO: 
-            dict_to_emit['estimated_score'] = current_query.score # TODO:   
-            dict_to_emit['thresh'] = current_query.thresh        
+            dict_to_emit['c_query'] = current_query._as_tuple()
+            dict_to_emit['c_estimated_precision'] = current_query.precision # TODO: 
+            dict_to_emit['c_estimated_recall'] = current_query.recall # TODO: 
+            dict_to_emit['c_estimated_score'] = current_query.score # TODO:   
+            dict_to_emit['c_thresh'] = current_query.thresh   
 
         # Info on pair
         dict_to_emit['source_idx'] = self.current_source_idx
@@ -2382,11 +2389,11 @@ class ConsoleLabeller(Labeller):
     
         if dict_to_emit['query_ranking'] != -1:
     
-            print('({0}): {1}'.format(dict_to_emit['query_ranking'], dict_to_emit['query']))
+            print('({0}): {1}'.format(dict_to_emit['query_ranking'], dict_to_emit['c_query']))
             print('Precision: {0}; Recall: {1}; Score: {2}'.format(
-                                              dict_to_emit['estimated_precision'],
-                                              dict_to_emit['estimated_recall'],
-                                              dict_to_emit['estimated_score']))
+                                              dict_to_emit['c_estimated_precision'],
+                                              dict_to_emit['c_estimated_recall'],
+                                              dict_to_emit['c_estimated_score']))
         
             print('ES score: {0}; Thresh: {1}; Is match: {2}'.format(dict_to_emit['es_score'],
                       dict_to_emit['thresh'], dict_to_emit['estimated_is_match']))
