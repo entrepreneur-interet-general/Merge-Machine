@@ -1,18 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed Oct  4 18:43:40 2017
-
-@author: m75380
-
-Directions:
-    - Parents do not include filters
-
-Filter by core when should is almost never used
-
-TODO: try multiple training orders on data
-TODO: force diversity in cores
-
+Tools to label matches and learn the optimal query templates for linking.
 """
 from collections import defaultdict
 import copy
@@ -599,15 +588,15 @@ class BasicLabeller():
     these label to score different query templates (`LabellerQueryTemplates`).
     
     The general process goes as follows:
-        0.1) Initiate queries/ metrics/ history
-        0.2) Read first row
+        0. Initiate queries/ metrics/ history
+        1. Read first row
         
-        1) Perform queries / update history of hits
-        2) Generate pairs to propose (based on sorted queries)
-        3...) Until row is over: User inputs label
-        4) Update metrics and history 
-        5) Sort queries
-        6) Gen new row and back to 1)
+        2. Perform queries / update history of hits
+        3. Generate pairs to propose (based on sorted queries)
+        4. Until row is over: User inputs label
+        5. Update metrics and history 
+        6. Sort queries
+        7. Generate new row and back to 2
         
     Examples
     --------
@@ -625,11 +614,11 @@ class BasicLabeller():
         A list of single queries that is being evaluated to help filtering 
         and generating pertinant queries for self.current_queries.
     self.must_filters: `dict` shaped as {column: list_of_words, ...}
-        positive filters on fields of the referential (to force results to 
+        Positive filters on fields of the referential (to force results to 
         include certain words in certain fields).
     self.must_not_filters: `dict` shaped as {column: list_of_words, ...}
-        negative filters on fields of the referential (to NOT return results 
-        that include certain words)
+        Negative filters on fields of the referential (to NOT return results 
+        that include certain words).
     """
     NUM_RESULTS = 3
     
@@ -942,8 +931,10 @@ class BasicLabeller():
     def _fetch_ref_item(self, ref_idx):
         """Fetch ref item from Elasticsearch database."""
         # TODO: look into batching this
-        return self.es.get(self.ref_index_name, ref_idx)['_source'] 
-
+        try:
+            return self.es.get(self.ref_index_name, 'structure', ref_idx)['_source'] 
+        except:
+            import pdb; pdb.set_trace()
     
     def _init_queries(self, match_cols, columns_to_index):
         """Generate initial query templates to be assigned to `current_queries`.
