@@ -10,12 +10,18 @@ This tools helps you link dirty table data with a clean referential using Elasti
 * No semantic knowledge is needed. The machine does have human type knowledge and doesn't know, for example, that "Castle" and "Fort" are close and could be used for a match. That being said, there are some cases where semantic knowledge was added using Elasticsearch's synonym function; for example with cities, it is possible to find "Paris" when looking for "Lutece" (Paris's old name)... You can add this sort of knowledge if you can provide some equivalence dataset.
 * No external knowledge is needed. The machine will match entities based only on the data that is provided in each row. It will not go fetch external data on some other database (except for synonyms described above).
 
-## Concepts
+### Concepts
 * `source`: A dirty table for which we are trying to find a reference
 * `ref` (referential): A clean table in which we will look for elements of the source
 * `query_template`: A custom representation of a scheme of an Elasticsearch query that will be used to search for elements of the source in the reference
 * `labeller`: A python object that uses user labelled pairs of matches/non_matches to learn the optimal query template to use for the best matching
 
+### Workflow
+1. Load source and reference tables
+2. Choose the columns which should match between the source and reference and which are likely to be useful in distinguishing a match
+3. Index the referential in Elasticsearch (in particular, index the columns used for matching)
+4. (Optional) Labelling: learn the optimal parameters for file linking by labelling pairs between the source and referential as match / non-match.
+5. Perform matching using the query templates inputed by the user or learned after labelling
 
 ## Column pairing
 
@@ -61,8 +67,10 @@ See [this post](https://stackoverflow.com/a/12846637/7856919) and [the official 
 ### How to choose the appropriate analyzers
 You can choose multiple analyzers per column. Pertinant analyzers will be able to extract distinctive features that are useful for matching. For example, when matching two address fiels, you might want to use 1) The integers analyzer (to get any street number); 2) The french analyzer (to get street names) 3) The city analyzer (to match only results that are in the same city). As for column pairing, increasing the number of analyzers might increase the theoretical ability for matching but will also reduce performance (memory, speed) and might induce noise that will lead to bad learning.
 
+## Labelling / Learning (Optionnal)
+TODO
 
-## Linking only (if you want to skip learning)
+## Linking
 You may want to skip learning alltogether and manually input the parameters for linking. Information to specify are the following: `index_name`, `ref_index_name`, `params`, `queries`, `must`, `must_not`.
 
 ### Query templates
