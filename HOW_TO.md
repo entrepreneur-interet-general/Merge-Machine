@@ -82,7 +82,18 @@ The labeller generates a very large amount of query templates (for different com
 ## 5. Linking
 You may want to skip learning alltogether and manually input the parameters for linking. Information to specify are the following: `index_name`, `ref_index_name`, `params`, `queries`, `must`, `must_not`.
 
-### Query templates
+### Queries
+
+Queries look like 
+
+```
+{
+'threshold': XXX,
+'template': [query templates]
+}
+```
+
+#### Query templates
 Query templates are a package-specific way of describing a matching strategy using elasticsearch. Query templates (or compound query templates) describe the combination of analyzers for each column pair, and the boost (see [the official documentation](https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-boost.html)) to use. Compound query templates are actually a list of single query templates which each are a 5-tuple looking like this:
 ```
 (bool_lvl, source_cols, ref_cols, analyzer_suffix, boost)
@@ -93,7 +104,7 @@ Query templates are a package-specific way of describing a matching strategy usi
 - analyzer_suffix: which analyzer to use for matching
 - boost: the Elasticsearch boost parameter
 
-### Threshold
+#### Threshold
 The Elasticsearch score above which a result will be considered to be a match.
 
 ### Must and Must-not
