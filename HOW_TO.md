@@ -18,10 +18,10 @@ This tools helps you link dirty table data with a clean referential using Elasti
 
 ### Workflow
 1. Load source and reference tables
-2. Choose the columns which should match between the source and reference and which are likely to be useful in distinguishing a match
-3. Index the referential in Elasticsearch (in particular, index the columns used for matching)
-4. (Optional) Labelling: learn the optimal parameters for file linking by labelling pairs between the source and referential as match / non-match.
-5. Perform matching using the query templates inputed by the user or learned after labelling
+2. [Choose the columns which should match between the source and reference and which are likely to be useful in distinguishing a match](#2-column-pairing)
+3. [Index the referential in Elasticsearch (in particular, index the columns used for matching)](#3-indexing-the-referential-in-elasticsearch)
+4. [(Optional) Labelling: learn the optimal parameters for file linking by labelling pairs between the source and referential as match / non-match](#4-labelling--learning-optionnal)
+5. [Perform matching using the query templates inputed by the user or learned after labelling](#5-linking)
 
 ## 2. Column pairing
 
