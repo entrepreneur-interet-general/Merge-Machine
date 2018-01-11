@@ -93,8 +93,15 @@ Queries look like
 }
 ```
 
-#### Query templates
-Query templates are a package-specific way of describing a matching strategy using elasticsearch. Query templates (or compound query templates) describe the combination of analyzers for each column pair, and the boost (see [the official documentation](https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-boost.html)) to use. Compound query templates are actually a list of single query templates which each are a 5-tuple looking like this:
+#### Query templates (compound query templates)
+Query templates are a package-specific way of describing a matching strategy using elasticsearch. Query templates (or compound query templates) describe the combination of analyzers for each column pair, and the boost (see [the official documentation](https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-boost.html)) to use. Compound query templates are actually a list of single query templates:
+
+```
+query_template = [single_query_template_1, single_query_template_2, ...]
+```
+
+#### Single query templates
+A single query template are 5-tuples looking like this:
 ```
 (bool_lvl, source_cols, ref_cols, analyzer_suffix, boost)
 ```
