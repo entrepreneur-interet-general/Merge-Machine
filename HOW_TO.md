@@ -23,7 +23,7 @@ This tools helps you link dirty table data with a clean referential using Elasti
 4. (Optional) Labelling: learn the optimal parameters for file linking by labelling pairs between the source and referential as match / non-match.
 5. Perform matching using the query templates inputed by the user or learned after labelling
 
-## Column pairing
+## 2. Column pairing
 
 Column pairing describes what columns share information that can be used for matching. You can indicate multiple column pairs to indicate that multiple informations can be used (matching "ESTABLISHMENT" and "STATE" columns for example). Also, pairings are not necessaraly one-to-one but can also be one-to-many, many-to-one or many-to-many; the different behaviors are described below.
 
@@ -51,7 +51,7 @@ This simply combines the effects of many-to-one and one-to-many.
 For example: {"source": ["CLIENT NAME", "CLIENT SURNAME"], "ref": ["Maried Name", "Maiden Name"]}
 ```
 
-## Indexing the referential in Elasticsearch
+## 3. Indexing the referential in Elasticsearch
 Once it is known what columns will be used for matching, we insert our reference file in Elasticsearch while using the appropriate analyzers 
 
 ### What is an analyzer?
@@ -67,10 +67,19 @@ See [this post](https://stackoverflow.com/a/12846637/7856919) and [the official 
 ### How to choose the appropriate analyzers
 You can choose multiple analyzers per column. Pertinant analyzers will be able to extract distinctive features that are useful for matching. For example, when matching two address fiels, you might want to use 1) The integers analyzer (to get any street number); 2) The french analyzer (to get street names) 3) The city analyzer (to match only results that are in the same city). As for column pairing, increasing the number of analyzers might increase the theoretical ability for matching but will also reduce performance (memory, speed) and might induce noise that will lead to bad learning.
 
-## Labelling / Learning (Optionnal)
-TODO
+## 4. Labelling / learning (optionnal)
+In the labelling phase, the user is asked to inform whether a pair of rows (one from the source, one from the referential) is thought to be a match. Labelling can be used for two purposes: 1) To learn the optimal parameters for linking. 2) To manually link two files (this may be much faster than doing that on excel for example).
 
-## Linking
+### Possible answers
+- yes: the pair is a match
+- no: the pair is not a match
+- uncertain: information is missing to decide (the row will be skipped)
+- forget: the row of the source has no match in the referential and should be skipped
+
+### How it works 
+The labeller generates a very large amount of query templates (for different combinations of analzyers, column pairs and boosts). For each new line of the source being labelled, it uses these query templates to look for the source row. Once the user labels a pair as a match, it compairs the real match with the results proposed by each query template and then updates the performance of each query template (precsion and recall). For each query template we compute the best threshold on the Elasticsearch score so as to optimize a custom score. Results above that threshold will be considered to be matches. Query templates are then sorted by score. We regularly filter out query templates for which the score or pricision is too low. 
+
+## 5. Linking
 You may want to skip learning alltogether and manually input the parameters for linking. Information to specify are the following: `index_name`, `ref_index_name`, `params`, `queries`, `must`, `must_not`.
 
 ### Query templates
