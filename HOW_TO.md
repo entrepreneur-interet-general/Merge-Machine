@@ -67,6 +67,15 @@ See [this post](https://stackoverflow.com/a/12846637/7856919) and [the official 
 ### How to choose the appropriate analyzers
 You can choose multiple analyzers per column. Pertinant analyzers will be able to extract distinctive features that are useful for matching. For example, when matching two address fiels, you might want to use 1) The integers analyzer (to get any street number); 2) The french analyzer (to get street names) 3) The city analyzer (to match only results that are in the same city). As for column pairing, increasing the number of analyzers might increase the theoretical ability for matching but will also reduce performance (memory, speed) and might induce noise that will lead to bad learning.
 
+### Languages
+Remember to adapt the language specific analyzer to your use case (`french`, `english`, ...). If analyzing a mulitilingual text, you might want to simply use the `standard` analyzer.
+
+### Common problems
+Often, errors during indexing are the result of analyzers not being properly defined. There are several common reasons:
+- You are calling a custom analyzer that was not defined.
+- You are using a stock analyzer, or using stock components in a custom analyzer, that cannot be found because your version of Elasticsearch is not up to date.
+- Your analyzer calls for resources that cannot be found. If using some of the Merge-Machine custom analyzers (city, country...), remember to run `es_gen_resources.py` (in `sudo`). This will place the resources in `/etc/elasticsearch`. Note that Elasticsearch does not allow for resources to be placed in another directory (as far as we know).
+
 ## 4. Labelling / learning (optionnal)
 In the labelling phase, the user is asked to inform whether a pair of rows (one from the source, one from the referential) is thought to be a match. Labelling can be used for two purposes: 1) To learn the optimal parameters for linking. 2) To manually link two files (this may be much faster than doing that on excel for example).
 
