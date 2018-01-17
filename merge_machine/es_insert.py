@@ -21,7 +21,8 @@ from .helpers import gen_index_settings
 def pre_process_tab(tab):
     ''' Clean tab before insertion.'''
     for x in tab.columns:
-        tab.loc[:, x] = tab[x].str.strip()
+        if tab.loc[:, x].dtype.kind == 'O':
+            tab.loc[:, x] = tab[x].str.strip()
     return tab
 
 
@@ -72,7 +73,7 @@ def create_index(es, table_name, columns_to_index, default_analyzer='keyword',
             raise Exception(new_message)
 
 
-def index(es, ref_gen, table_name, testing=False, file_len=0):
+def index(es, ref_gen, table_name, testing=False, file_len=0, action='index'):
     '''Insert values from `ref_gen` in the Elasticsearch index.
     
     Parameters
@@ -87,6 +88,8 @@ def index(es, ref_gen, table_name, testing=False, file_len=0):
         Whether or not to refresh index at each insertion (for dev purposes).
     file_len: 
         Original file len to display estimated time (for convenience).
+    action: str ("index" or "update")
+        Whether to index new row or update
     '''
     
     ic = client.IndicesClient(es)
@@ -101,20 +104,24 @@ def index(es, ref_gen, table_name, testing=False, file_len=0):
     logging.info('Started indexing')    
     i = 0
     t_start = time.time()
-    for ref_tab in ref_gen:        
+    for ref_tab in ref_gen:
         ref_tab = pre_process_tab(ref_tab)
         body = ''
         for key, doc in ref_tab.where(ref_tab.notnull(), None).to_dict('index').items():
             #TODO: make function that limits bulk size
             index_order = json.dumps({
-                                "index": {
+                                action: {
                                           "_index": table_name, 
                                           "_type": 'structure', 
                                           "_id": str(key)
                                          }
                                 })
             body += index_order + '\n'
-            body += json.dumps(doc) + '\n'
+            if action == 'index':
+                body += json.dumps(doc) + '\n'
+            elif action == 'update':
+                   body += json.dumps({"doc": doc}) + '\n'
+        print(body)
         es.bulk(body)
         i += len(ref_tab)
         

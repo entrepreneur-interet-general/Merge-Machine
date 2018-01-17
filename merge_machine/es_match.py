@@ -310,7 +310,7 @@ def es_linker(es, source, params):
     
     # Perform matching exact (labelled) pairs
     if exact_ref_indices:
-        full_responses = [es.get(index_name, ref_idx) for ref_idx in exact_ref_indices]
+        full_responses = [es.get(index_name, 'structure', ref_idx) for ref_idx in exact_ref_indices]
         exact_matches_in_ref = pd.DataFrame([resp['_source'] for resp in full_responses], 
                                             index=exact_source_indices)
         exact_matches_in_ref.columns = [x + '__REF' for x in exact_matches_in_ref.columns]

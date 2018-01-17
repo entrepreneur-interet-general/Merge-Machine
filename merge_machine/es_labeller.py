@@ -620,7 +620,7 @@ class BasicLabeller():
         Negative filters on fields of the referential (to NOT return results 
         that include certain words).
     """
-    NUM_RESULTS = 3
+    NUM_SEARCH_RESULTS = 3
     
     MAX_NUM_SAMPLES = 100
     
@@ -980,7 +980,7 @@ class BasicLabeller():
         """
         if self.current_source_idx not in self.current_queries[0].history_pairs:
             results = self.pruned_bulk_search(self.current_queries, 
-                            self.current_source_item, self.NUM_RESULTS)
+                            self.current_source_item, self.NUM_SEARCH_RESULTS)
             self.add_results(results)   
 
 
@@ -1642,7 +1642,7 @@ class BasicLabeller():
             
             # Fetch data for next row
             results = self.pruned_bulk_search(self.current_queries, 
-                                    self.current_source_item, 1) #self.NUM_RESULTS)
+                                    self.current_source_item, 1) #self.NUM_SEARCH_RESULTS)
             self.add_results(results)
             
             self.add_labelled_pair(labelled_pair)
@@ -1682,7 +1682,7 @@ class BasicLabeller():
         if call_next_row:
             # Fetch data for next row
             results = self.pruned_bulk_search(self.current_queries, 
-                            self.current_source_item, self.NUM_RESULTS)
+                            self.current_source_item, self.NUM_SEARCH_RESULTS)
             self.add_results(results)
         
         self._sanity_check()
