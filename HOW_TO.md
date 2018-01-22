@@ -17,11 +17,23 @@ This tools helps you link dirty table data with a clean referential using Elasti
 * `labeller`: A python object that uses user labelled pairs of matches/non_matches to learn the optimal query template to use for the best matching
 
 ### Workflow
-1. Load source and reference tables
+1. [Load source and reference tables](#1-input-data)
 2. [Choose the columns which should match between the source and reference and which are likely to be useful in distinguishing a match](#2-column-pairing)
 3. [Index the referential in Elasticsearch (in particular, index the columns used for matching)](#3-indexing-the-referential-in-elasticsearch)
 4. [(Optional) Labelling: learn the optimal parameters for file linking by labelling pairs between the source and referential as match / non-match](#4-labelling--learning-optionnal)
 5. [Perform matching using the query templates inputed by the user or learned after labelling](#5-linking)
+
+## 1. Input data
+This program takes two `pandas.DataFrame` objects as input (one source, one reference). 
+
+### Should I pre-process the data?
+It depends... We suggest you try without matching without preprocessing the data. But keep in mind that the closer the data between the two files, the better the matching will work. If the results are not satisfying, you may want to try the following:
+- Remove words that are not present in both files
+- Create columns with categorical data
+- Use a geocoder to normalize geographical data to get standardized components of an address
+- If matching establishment names with acronyms, create a new field with the acronym only
+- Force codes (phone numbers, ...) to be formated in the same way
+- Anything that will make the source more similar to the reference...
 
 ## 2. Column pairing
 
