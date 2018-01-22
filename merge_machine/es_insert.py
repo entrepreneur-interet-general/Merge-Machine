@@ -72,6 +72,15 @@ def create_index(es, table_name, columns_to_index, default_analyzer='keyword',
                             'Run es_gen_resource.py (in sudo) for this to work'
             raise Exception(new_message)
 
+def update_analyzers(es, table_name, columns_to_index, default_analyzer='keyword', 
+                 analyzer_index_settings=None, force=False):
+    
+    # Close
+    
+    # Put
+    pass
+    # Open
+    
 
 def index(es, ref_gen, table_name, testing=False, file_len=0, action='index'):
     '''Insert values from `ref_gen` in the Elasticsearch index.
@@ -121,7 +130,6 @@ def index(es, ref_gen, table_name, testing=False, file_len=0, action='index'):
                 body += json.dumps(doc) + '\n'
             elif action == 'update':
                    body += json.dumps({"doc": doc}) + '\n'
-        print(body)
         es.bulk(body)
         i += len(ref_tab)
         
