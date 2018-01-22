@@ -517,7 +517,7 @@ class CoreScorerQueryTemplate(SingleQueryTemplate):
         
         text_source = ' '.join(source_item[col] for col in self.source_col if source_item[col] is not None)
         tokens_source = {x['token'] for x in self._analyze(es, index_name, analyzer, text_source)['tokens']}
-        
+
         text_ref = ' '.join(ref_item[col] for col in self.ref_col  if ref_item[col] is not None)
         tokens_ref = {x['token'] for x in self._analyze(es, index_name, analyzer, text_ref)['tokens']}
 
@@ -1051,7 +1051,7 @@ class BasicLabeller():
         Update the current source and reference row currently being labelled. 
         This assumes that `source_gen` was initialized.
         """
-        NUM_ROW_TRIES = 10
+        NUM_ROW_TRIES = 20
         
         for _ in range(NUM_ROW_TRIES):
             try:
@@ -1367,7 +1367,7 @@ class BasicLabeller():
                        '(certain_column_matches should be a unique identifier)')
             
             self.current_ref_idx = results[0][0]['_id']
-            self.current_ref_item = results[0][0]['_source']  
+            self.current_ref_item = results[0][0]['_source'] # _source is the ES field
             
             pair = (self.current_source_idx, self.current_ref_idx)
                   
@@ -1556,7 +1556,8 @@ class BasicLabeller():
                 for query in self.single_core_queries:
                     query.add_labelled_pair_items(self.es, self.ref_index_name, 
                                     self.current_source_item, self.current_ref_item)
-            
+
+                        
             # Filter queries
             self.filter_()
             
