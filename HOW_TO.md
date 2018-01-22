@@ -23,6 +23,18 @@ This tools helps you link dirty table data with a clean referential using Elasti
 4. [(Optional) Labelling: learn the optimal parameters for file linking by labelling pairs between the source and referential as match / non-match](#4-labelling--learning-optionnal)
 5. [Perform matching using the query templates inputed by the user or learned after labelling](#5-linking)
 
+## 1. Input data
+This program takes two `pandas.DataFrame` objects as input (one source, one reference). 
+
+### Should I pre-process the data?
+It depends... We suggest you try without matching without preprocessing the data. But keep in mind that the closer the data between the two files, the better the matching will work. If the results are not satisfying, you may want to try the following:
+- Remove words that are not present in both files
+- Create columns with categorical data
+- Use a geocoder to normalize geographical data to get standardized components of an address
+- If matching establishment names with acronyms, create a new field with the acronym only
+- Force codes (phone numbers, ...) to be formated in the same way
+- Anything that will make the source more similar to the reference...
+
 ## 2. Column pairing
 
 Column pairing describes what columns share information that can be used for matching. You can indicate multiple column pairs to indicate that multiple informations can be used (matching "ESTABLISHMENT" and "STATE" columns for example). Also, pairings are not necessaraly one-to-one but can also be one-to-many, many-to-one or many-to-many; the different behaviors are described below.
