@@ -4,6 +4,7 @@
 
 A python3 library to link a dirty CSV file with a clean reference table. It is meant to as generic as possible and includes a labeller to learn optimal parameters for each matching scenario.
 
+![Alt Text](documentation/labeller_peek.gif)
 
 ## How to install ?
 
