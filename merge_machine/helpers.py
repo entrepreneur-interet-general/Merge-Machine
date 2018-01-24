@@ -11,6 +11,7 @@ Various helping functions used in the code
 import copy
 import itertools
 import json
+import logging
 
 import unidecode
 
@@ -141,7 +142,7 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
     return body
 
 
-def _gen_bulk(index_name, search_templates, must, must_not, num_results, chunk_size=100):
+def _gen_bulk(index_name, search_templates, must, must_not, num_results, chunk_size=1000):
     '''Create a generator of strings for bulk requests in Elasticsearch.
     
     Create bulks of all requests in search_templates and chop them off by 
@@ -195,7 +196,8 @@ def _bulk_search(es, index_name, all_query_templates, rows, must_filters, must_n
     '''Search for multiple rows with multiple query templates.
     
     Bulk search for all rows in `rows` trying -for each row- all query 
-    templates in `all_query_templates`.
+    templates in `all_query_templates`. Results are in the order associated to
+    [(query_1, row_1), (query_1, row_2), ...(query_2, row_1), (query_2, row_2), ...]
     
     Parameters
     ----------
@@ -203,9 +205,8 @@ def _bulk_search(es, index_name, all_query_templates, rows, must_filters, must_n
         Connection to Elasticsearch.
     index_name: str
         Name of the index in Elasticsearch.
-    all_query_templates: iterator 2 len tuples of shape `(query_template, row)`
-        The queries to use for search. Each tuple represents a query 
-        (searching for the data in `row` using `query_template`).
+    all_query_templates: iterator tuples of len 5
+        The queries to use for search.
     rows: iterator of pandas.Series or dict like `{col1: val1, col2: val2, ...}`
         The rows to search for.
     must_filters: `dict` shaped as {column: list_of_words, ...}
@@ -220,8 +221,11 @@ def _bulk_search(es, index_name, all_query_templates, rows, must_filters, must_n
     og_search_templates: list
         The search templates that were used in the same order as 
         `full_responses`.
-    full_responses: list of Elasticsearch results
-        List of all results.
+    full_responses: dict containing Elasticsearch results
+        Dict indexed by integers. Containing the results of queries in 
+        `og_search_template`. The indices correspond to the position of the 
+        query in `og_search_templates` (Ex: `full_responses[4]` is the result 
+        when searching for `og_search_templates[4]`).
     '''
     i = 1
     full_responses = dict() 
@@ -235,7 +239,9 @@ def _bulk_search(es, index_name, all_query_templates, rows, must_filters, must_n
                                   must_filters, must_not_filters, num_results)
         responses = []
         for bulk_body, _ in bulk_body_gen:
+            logging.debug('Starting bulk search')
             responses.extend(es.msearch(bulk_body)['responses']) #, index=index_name)
+            logging.debug('Got {0} results for bulk search'.format(len(responses)))
             
         # TODO: add error on query template with no must or should
         has_error_vect = ['error' in x for x in responses]
