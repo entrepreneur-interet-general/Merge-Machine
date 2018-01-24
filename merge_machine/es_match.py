@@ -157,12 +157,10 @@ def _re_duplicate(tab, small_tab, indices):
     small_tab = small_tab[cols]
     
     join_col = '__SOURCE_GROUP'
-    try:
-        tab[join_col] = [indices[idx] for idx in tab.index]
-        tab = tab.merge(small_tab, left_on=join_col, right_index=True)
-    except:
-        import pdb;
-        pdb.set_trace()
+    
+    tab[join_col] = [indices[idx] for idx in tab.index]
+    tab = tab.merge(small_tab, left_on=join_col, right_index=True)
+
     
     return tab
 
@@ -172,6 +170,76 @@ def _tuplify(obj):
         return (obj, )
     else:
         return obj
+
+
+def _priority_bulk_search(es, index_name, all_queries, rows, must_filters, must_not_filters, num_results=3):
+    '''Search for multiple rows with multiple query templates returning results
+    only for the first query that yields a match.
+    
+    Bulk search for all rows in `rows` trying -for each row- all query 
+    templates in `all_query_templates`. We try all queries one after the other;
+    for each row, once a query returns a valid result (with an ES score above 
+    the threshold for this query), results for the following queries will be set 
+    to None. The output format is the same as that of bulk search.
+    
+    Parameters
+    ----------
+    es: instance of `Elasticsearch`
+        Connection to Elasticsearch.
+    index_name: str
+        Name of the index in Elasticsearch.
+    all_queries: iterator dict of shape {'thresh': XXX, 'template': query_template}
+        The query templates to use for search and the threshold above which
+        a result will be considered a match.
+    rows: iterator of pandas.Series or dict like `{col1: val1, col2: val2, ...}`
+        The rows to search for.
+    must_filters: `dict` shaped as {column: list_of_words, ...}
+        Terms to filter by field (AND: will include ONLY IF ALL are in text).
+    must_not_filters: `dict` shaped as {column: list_of_words, ...}
+        Terms to exclude by field from search (OR: will exclude if ANY is found
+    num_results: int
+        The maximum number results per individual query. 
+        
+    Returns
+    -------
+    og_search_templates: list
+        The search templates that were used in the same order as 
+        `full_responses`.
+    full_responses: dict containing Elasticsearch results
+        Dict indexed by integers. Containing the results of queries in 
+        `og_search_template`. The indices correspond to the position of the 
+        query in `og_search_templates` (Ex: `full_responses[4]` is the result 
+        when searching for `og_search_templates[4]`).
+    '''
+    import itertools
+    
+    full_responses = dict()
+    all_queries = list(all_queries)
+    rows = {i: row for i, row in enumerate(rows)}
+    num_rows = len(rows)
+    og_search_templates = list(enumerate(itertools.product(all_queries, rows)))
+    
+    full_responses = dict()
+    for i_query, q in enumerate(all_queries):
+        print('Len rows at query {0} is {1}'.format(i_query, len(rows)))
+        partial_rows = [x[1] for x in sorted(rows.items())]
+        partial_idxs = [x[0] for x in sorted(rows.items())] # Og row id
+        _, partial_response = _bulk_search(es, index_name, 
+                        [q['template']], partial_rows, must_filters, must_not_filters, num_results=1)
+        
+        # Put as: row_id: response
+        partial_response = {partial_idxs[i]: resp for i, resp in partial_response.items()}   
+ 
+        # Add to full response
+        full_responses.update({i_query*num_rows + i_row: \
+                            val for i_row, val in partial_response.items()})
+        
+        rows = {i: row for i, row in rows.items() if not _is_match(partial_response[i], q['thresh'])}
+        
+        
+    full_responses = {i: full_responses.get(i, {'hits': {'hits': []}}) for i in range(len(og_search_templates))}
+    
+    return og_search_templates, full_responses
 
 def es_linker(es, source, params):
     """Link source to reference following instructions in params and return the
@@ -206,7 +274,7 @@ def es_linker(es, source, params):
         `source` which is the concatenation of `source` and of the matches found 
         in the reference table (columns with suffix: '__REF').
         
-        In addition to matching the following columns are created:
+        In addition to matching, the following columns are created:
             __IS_MATCH: bool
                 Weather or not the result is thought to be a match (the score
                 is above the threshold)
@@ -228,7 +296,7 @@ def es_linker(es, source, params):
     """
     
     index_name = params['index_name']
-    queries = params['queries'][:9] # queries is {'template': ..., 'threshold':...} / Max 9 queries
+    queries = params['queries'][:3] # queries is {'template': ..., 'threshold':...} / Max 9 queries
     must_filters = params.get('must', {})
     must_not_filters = params.get('must_not', {})
     exact_pairs = params.get('exact_pairs', [])
@@ -250,10 +318,11 @@ def es_linker(es, source, params):
     if source_indices:
         rows = (x[1] for x in small_source.iterrows() if x[0] in source_indices)
         
-        all_search_templates, res_of_bulk_search = _bulk_search(es, index_name, 
-                    [q['template'] for q in queries], rows, must_filters, must_not_filters, num_results=1)
+        all_search_templates, res_of_bulk_search = _priority_bulk_search(es, index_name, 
+                    queries, rows, must_filters, must_not_filters, num_results=1)
         
         confidence_means = _confidence_estimator(res_of_bulk_search, len(queries), 'mean')
+
         
         full_responses = _bulk_search_to_full_response(res_of_bulk_search, [q['thresh'] for q in queries])
         del res_of_bulk_search
@@ -309,8 +378,11 @@ def es_linker(es, source, params):
         matches_in_ref = pd.DataFrame()
     
     # Perform matching exact (labelled) pairs
+    print('Num exact ref indices: {0}'.format(len(exact_ref_indices)))
     if exact_ref_indices:
+        print('Fetching exact matches')
         full_responses = [es.get(index_name, 'structure', ref_idx) for ref_idx in exact_ref_indices]
+        print('Done fetching exact matches')
         exact_matches_in_ref = pd.DataFrame([resp['_source'] for resp in full_responses], 
                                             index=exact_source_indices)
         exact_matches_in_ref.columns = [x + '__REF' for x in exact_matches_in_ref.columns]
