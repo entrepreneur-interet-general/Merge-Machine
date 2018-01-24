@@ -1948,17 +1948,18 @@ class BasicLabeller():
     @print_name
     def export_best_params(self):
         """Return the parameters for the best query for matching (use in `es_linker`)."""
-        best_query = self.current_queries[0]
-        
+  
         params = dict()
         params['index_name'] = self.ref_index_name
         params['queries'] = [{'template': q._as_tuple(), 
                               'thresh': 0,
                               'best_thresh': q.thresh,
-                              'expected_precision': best_query.precision,
+                              'expected_precision': q.precision,
                               'expected_recall': q.recall} \
                                   for q in self.current_queries]
-        
+        params['queries'] = sorted(params['queries'], 
+                              key=lambda x: x['expected_precision'], reverse=True)
+
         params['must'] = self.must_filters
         params['must_not'] = self.must_not_filters
         
