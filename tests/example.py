@@ -11,6 +11,11 @@ from merge_machine.es_match import es_linker
 from merge_machine.es_config import DEFAULT_ANALYZER, INDEX_SETTINGS_TEMPLATE
 
 # =============================================================================
+# 0. TUTORIAL DATA CAN BE FOUND HERE:
+## https://github.com/entrepreneur-interet-general/Merge-Machine/tree/master/tests/data_1
+## =============================================================================
+
+# =============================================================================
 # 1. USER CONFIG
 # =============================================================================
 
