@@ -188,7 +188,7 @@ def _priority_bulk_search(es, index_name, all_queries, rows, must_filters, must_
         Connection to Elasticsearch.
     index_name: str
         Name of the index in Elasticsearch.
-    all_queries: iterator dict of shape {'thresh': XXX, 'template': query_template}
+    all_queries: iterator dict of shape {'best_thresh': XXX, 'template': query_template}
         The query templates to use for search and the threshold above which
         a result will be considered a match.
     rows: iterator of pandas.Series or dict like `{col1: val1, col2: val2, ...}`
@@ -222,8 +222,8 @@ def _priority_bulk_search(es, index_name, all_queries, rows, must_filters, must_
     full_responses = dict()
     for i_query, q in enumerate(all_queries):
         print('Len rows at query {0} is {1}'.format(i_query, len(rows)))
-        partial_rows = [x[1] for x in sorted(rows.items())]
-        partial_idxs = [x[0] for x in sorted(rows.items())] # Og row id
+        partial_rows = [x[1] for x in sorted(rows.items(), key=lambda x: x[0])]
+        partial_idxs = [x[0] for x in sorted(rows.items(), key=lambda x: x[0])] # Og row id
         _, partial_response = _bulk_search(es, index_name, 
                         [q['template']], partial_rows, must_filters, must_not_filters, num_results=1)
         
@@ -234,7 +234,7 @@ def _priority_bulk_search(es, index_name, all_queries, rows, must_filters, must_
         full_responses.update({i_query*num_rows + i_row: \
                             val for i_row, val in partial_response.items()})
         
-        rows = {i: row for i, row in rows.items() if not _is_match(partial_response[i], q['thresh'])}
+        rows = {i: row for i, row in rows.items() if not _is_match(partial_response[i], q['best_thresh'])}
         
         
     full_responses = {i: full_responses.get(i, {'hits': {'hits': []}}) for i in range(len(og_search_templates))}
@@ -324,7 +324,7 @@ def es_linker(es, source, params):
         confidence_means = _confidence_estimator(res_of_bulk_search, len(queries), 'mean')
 
         
-        full_responses = _bulk_search_to_full_response(res_of_bulk_search, [q['thresh'] for q in queries])
+        full_responses = _bulk_search_to_full_response(res_of_bulk_search, [q['best_thresh'] for q in queries])
         del res_of_bulk_search
 
         matches_in_ref = pd.DataFrame([resp['hits']['hits'][0]['_source'] \
@@ -345,7 +345,7 @@ def es_linker(es, source, params):
         query_index = pd.Series([i for i, resp in full_responses], 
                                 index=matches_in_ref.index)
         
-        threshold = pd.Series([queries[i]['thresh'] \
+        threshold = pd.Series([queries[i]['best_thresh'] \
                                 for i, _ in full_responses], index=matches_in_ref.index)
 
         scaled_confidence = 1 + (confidence - threshold) \
