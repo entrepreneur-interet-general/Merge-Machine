@@ -400,6 +400,13 @@ def es_linker(es, source, params):
     # Re-create original file if necessary
     if duplicate_indices is not None:
         return _re_duplicate(source, new_source, duplicate_indices)
+    
+    # Always present source in same order
+    special_cols = ['__CONFIDENCE', '__ES_SCORE', '__ID_QUERY', '__ID_REF', 
+                       '__IS_MATCH', '__THRESH']
+    new_source = new_source[[x for x in new_source.columns if x not in special_cols] \
+                            + special_cols]
+    
     return new_source
 
     
