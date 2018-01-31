@@ -23,6 +23,7 @@ import requests
 import urllib
 import urllib.request
 
+from elasticsearch import Elasticsearch
 from unidecode import unidecode
 
 logging.basicConfig(level=logging.INFO)
@@ -262,33 +263,55 @@ def gen_resource_country():
         name_alt.append((name, alt))
     
     write_keep_syn(name_alt, file_path_keep, file_path_syn)
+
+def _get_default_conf_dir():
+    """Return the default directory for elasticsearch configuration (in which to)
+    write resource files (usually /etc/elasticsearch).
     
+    Returns
+    -------
+    str or None:
+        Return None when there are multiple directories (multiple nodes). 
+        Otherwise, return the default conf directory path.
+    """
+    nodes = Elasticsearch().nodes.info()['nodes']
+    resource_dirs = list({node['settings']['default']['path']['conf'] \
+                         for node in nodes.values()})
+    if len(resource_dirs) > 1:
+        elasticsearch_resource_dir = None
+    else:
+        elasticsearch_resource_dir = resource_dirs[0]
+    return elasticsearch_resource_dir
+
 if __name__ == '__main__':
     
     resource_generators = {'city': gen_resource_city, 
                            'country': gen_resource_country}
     
     import argparse
-    
     DESCRIPTION = 'Fetch, transform and write resources for Elasticearch' \
                   ' analyzers (synonyms, filters, etc.).'
-    EPILOG = 'Writing to Elasticsearch resource directories might require' \
+    EPILOG = '/!\ Writing to Elasticsearch resource directories might require' \
              ' running this script with sudo permissions, or changing the' \
              ' rights for your resource directory.'
         
-    parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG)
+    parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG,
+                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('analyzers', nargs='*', 
                         help='List of analyzers for which to create resources.' \
                 ' Choose from:\n{}'.format(list(resource_generators.keys())), 
                         default=list(resource_generators.keys()))
     parser.add_argument('-d', '--es-resource-dir',  
-                        help='Elasticsearch resource directory (see in your' \
-                        ' Elasticsearch config file)',
-                        default='/etc/elasticsearch')
+                        help='Elasticsearch resource directory',
+                        default=_get_default_conf_dir())
             
     args = parser.parse_args()
-    
+
     elasticsearch_resource_dir = args.es_resource_dir
+    if elasticsearch_resource_dir is None:
+        raise RuntimeError('Multiple resource directories were found for'\
+                           ' Elasticsearch in multiple nodes. Use the -d flag' \
+                           ' to specify where to write the resource files')
     
     for analyzer in args.analyzers:
         if analyzer in resource_generators:

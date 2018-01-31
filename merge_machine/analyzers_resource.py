@@ -23,7 +23,6 @@ Custom analyzers for Elasticsearch requiring processing of external resources.
 
 
 
-
 #
 #filters = {
 #    "my_edgeNGram": {
