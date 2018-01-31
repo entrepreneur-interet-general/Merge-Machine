@@ -17,6 +17,7 @@ Valid match if no token on one of both sides
 """
 from collections import defaultdict
 import json
+import logging
 import os
 import requests
 import urllib
@@ -26,8 +27,6 @@ from unidecode import unidecode
 
 curdir = os.path.dirname(os.path.realpath(__file__))
 os.chdir(curdir)
-
-elasticsearch_resource_dir = '/etc/elasticsearch'
 
 #==============================================================================
 # Helper functions
@@ -56,6 +55,7 @@ def write_keep_syn(name_alt_gen, file_path_keep, file_path_syn,
     file_path_syn: str
         Path to the resource file used for synonyms (translating).
     '''
+    logging.info('Writing to {} and {}'.format(file_path_syn, file_path_keep))
     with open(file_path_syn, 'w') as w_syn, \
          open(file_path_keep, 'w') as w_keep:
         for name, alternates in name_alt_gen:
@@ -96,7 +96,7 @@ def gen_resource_city():
         # TODO: change for CSV, take less space...
         # View data here https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000%40public/export
         url = 'https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000@public/download/?format=json&timezone=Europe/Berlin&use_labels_for_header=true'
-        print('Downloading resource (100M) from:\n{0}\nWriting to:\n{1}\nThis may take some time...'.format(url, file_path))
+        logging.info('Downloading resource (100M) from:\n{0}\nWriting to:\n{1}\nThis may take some time...'.format(url, file_path))
         urllib.request.urlretrieve(url, file_path)
         
     with open(file_path) as f:
@@ -109,8 +109,8 @@ def gen_resource_city():
     # cities_to_countries = defaultdict(set)
     name_to_alternates = defaultdict(set)
     for i, row in enumerate(res):
-        if i%10000 == 0:
-            print('Did {0}/{1}'.format(i, len(res)))
+        if i%50000 == 0:
+            logging.info('Generating city resource {0}/{1}'.format(i, len(res)))
             
         my_row = row['fields']
         name = my_row['name']
@@ -228,7 +228,34 @@ def gen_resource_country():
     write_keep_syn(name_alt, file_path_keep, file_path_syn)
     
 if __name__ == '__main__':
-#    gen_resource_city()
-#    gen_resource_organization()
-    gen_resource_city()
-    gen_resource_country()
+    
+    resource_generators = {'city': gen_resource_city, 
+                           'country': gen_resource_country}
+    
+    import argparse
+    
+    DESCRIPTION = 'Fetch, transform and write resources for Elasticearch' \
+                  ' analyzers (synonyms, filters, etc.).'
+    EPILOG = 'Writing to Elasticsearch resource directories might require' \
+             ' running this script with sudo permissions, or changing the' \
+             ' rights for your resource directory.'
+        
+    parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG)
+    parser.add_argument('analyzers', nargs='*', 
+                        help='List of analyzers for which to create resources.' \
+                ' Choose from:\n{}'.format(list(resource_generators.keys())), 
+                        default=list(resource_generators.keys()))
+    parser.add_argument('-d', '--es-resource-dir',  
+                        help='Elasticsearch resource directory (see in your' \
+                        ' Elasticsearch config file)',
+                        default='/etc/elasticsearch')
+            
+    args = parser.parse_args()
+    
+    elasticsearch_resource_dir = args.es_resource_dir
+    
+    for analyzer in args.analyzers:
+        if analyzer in resource_generators:
+            resource_generators[analyzer]()
+        else:
+            raise Warning('No resource generator for analyzer: {}'.format(analyzer))
