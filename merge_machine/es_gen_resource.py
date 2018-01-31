@@ -25,12 +25,41 @@ import urllib.request
 
 from unidecode import unidecode
 
+logging.basicConfig(level=logging.INFO)
+
 curdir = os.path.dirname(os.path.realpath(__file__))
 os.chdir(curdir)
 
 #==============================================================================
 # Helper functions
 #==============================================================================
+
+def demand_confirmation(size, url, file_path):
+    """Ask for user input before downloading a file.
+    
+    Parameters
+    ----------
+    size: str
+        The size of the file about to be downloaded.
+    url: str
+        URL from which we download resources
+    file_path: str
+        The path to which the file will be written.
+    
+    Returns
+    -------
+    bool:
+        Whether or not the user confirmed download
+    """
+    user_confirm = input('This script will download temporary resources files' \
+                 '({}) from {} and place them in {}.'.format(size, url, file_path) \
+                 + '\nYou can delete them afterwards. \n' \
+                 'Shall we proceed? y(es)/n(o) (defaults to yes)\n>')
+    if user_confirm.lower() in ['yes', 'y', '']:
+        return True
+    return False
+
+
 
 def write_keep_syn(name_alt_gen, file_path_keep, file_path_syn,
                    asciifolding=True, chars_to_replace=['-', "'"]):
@@ -89,15 +118,22 @@ def gen_resource_city():
     
     file_path = os.path.join('resource', 'es_linker', 
                              'geonames-all-cities-with-a-population-1000.json')
+
     # Check that resource is available
     if not os.path.isfile(file_path):
+        url = 'https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000@public/download/?format=json&timezone=Europe/Berlin&use_labels_for_header=true'
+        if not demand_confirmation('100M', url, file_path):
+            logging.warning('Aborting resource generation for "city" analyzer')
+            return
+
         if not os.path.isdir(os.path.split(file_path)[0]):
             os.makedirs(os.path.split(file_path)[0])
         # TODO: change for CSV, take less space...
         # View data here https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000%40public/export
-        url = 'https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000@public/download/?format=json&timezone=Europe/Berlin&use_labels_for_header=true'
         logging.info('Downloading resource (100M) from:\n{0}\nWriting to:\n{1}\nThis may take some time...'.format(url, file_path))
         urllib.request.urlretrieve(url, file_path)
+    else:
+        logging.info('File {} already exists. Using this version.'.format(file_path))
         
     with open(file_path) as f:
         res = json.load(f)
