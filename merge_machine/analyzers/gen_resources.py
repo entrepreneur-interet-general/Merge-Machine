@@ -7,13 +7,9 @@ Created on Tue Sep 19 16:58:29 2017
 
 Run this script in sudo to generate resource files for Elasticsearch analyzers 
 
-
 https://www.elastic.co/guide/en/elasticsearch/reference/current/analysis-synonym-tokenfilter.html
 https://www.elastic.co/guide/en/elasticsearch/reference/current/analysis-keep-words-tokenfilter.html
 https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000%40public/export/?disjunctive.country
-
-Valid match if no token on one of both sides
-
 """
 from collections import defaultdict
 import json

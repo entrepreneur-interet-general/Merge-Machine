@@ -8,7 +8,7 @@ from merge_machine import es_insert
 from merge_machine.es_labeller import ConsoleLabeller
 from merge_machine.es_match import es_linker
 
-from merge_machine.es_config import ANALYZERS, DEFAULT_ANALYZER, INDEX_SETTINGS_TEMPLATE
+from merge_machine.analyzers import ANALYZERS
 
 # =============================================================================
 # 0. TUTORIAL DATA CAN BE FOUND HERE:
