@@ -23,6 +23,7 @@ import requests
 import urllib
 import urllib.request
 
+
 from elasticsearch import Elasticsearch
 from unidecode import unidecode
 
@@ -30,6 +31,13 @@ logging.basicConfig(level=logging.INFO)
 
 curdir = os.path.dirname(os.path.realpath(__file__))
 os.chdir(curdir)
+
+# =============================================================================
+# Messages
+# =============================================================================
+
+skip_msg = 'Skipping resource generation for analyzer "{}" (files already '\
+           'exist). You can override this by setting the "force" argument to True'
 
 #==============================================================================
 # Helper functions
@@ -60,8 +68,26 @@ def demand_confirmation(size, url, file_path):
         return True
     return False
 
+def _get_default_conf_dir():
+    """Return the default directory for elasticsearch configuration (in which to)
+    write resource files (usually /etc/elasticsearch).
+    
+    Returns
+    -------
+    str or None:
+        Return None when there are multiple directories (multiple nodes). 
+        Otherwise, return the default conf directory path.
+    """
+    nodes = Elasticsearch().nodes.info()['nodes']
+    resource_dirs = list({node['settings']['default']['path']['conf'] \
+                         for node in nodes.values()})
+    if len(resource_dirs) > 1:
+        elasticsearch_resource_dir = None
+    else:
+        elasticsearch_resource_dir = resource_dirs[0]
+    return elasticsearch_resource_dir
 
-
+        
 def write_keep_syn(name_alt_gen, file_path_keep, file_path_syn,
                    asciifolding=True, chars_to_replace=['-', "'"]):
     '''Write both a filter (keep) and synonym file to use as Elasticsearch
@@ -85,6 +111,7 @@ def write_keep_syn(name_alt_gen, file_path_keep, file_path_syn,
     file_path_syn: str
         Path to the resource file used for synonyms (translating).
     '''
+    
     logging.info('Writing to {} and {}'.format(file_path_syn, file_path_keep))
     with open(file_path_syn, 'w') as w_syn, \
          open(file_path_keep, 'w') as w_keep:
@@ -114,9 +141,18 @@ def write_keep_syn(name_alt_gen, file_path_keep, file_path_syn,
 # Resource generation functions
 #==============================================================================
 
-def gen_resource_city():
+def gen_resource_city(elasticsearch_resource_dir, force=False):
     '''Generate resource files for the city analyzer'''
     
+    
+    # Paths to synonym and keep files for the city analyzer 
+    file_path_keep = os.path.join(elasticsearch_resource_dir, 'city_keep.txt')
+    file_path_syn = os.path.join(elasticsearch_resource_dir, 'city_synonyms.txt')
+
+    if os.path.isfile(file_path_keep) and os.path.isfile(file_path_syn) and not force:
+        logging.warning(skip_msg.format('city'))
+        return
+
     file_path = os.path.join('resource', 'es_linker', 
                              'geonames-all-cities-with-a-population-1000.json')
 
@@ -161,22 +197,7 @@ def gen_resource_city():
         if alternates:
             name_to_alternates[name].update(alternates)
         
-        
-        #        if 'country' in my_row:
-        #            country = my_row['country']
-        #    
-        #            countries.add(country)
-        #            for city in [name] + alternates:
-        #                cities_to_countries[city].add(country)
-        #        else:
-        #            no_country_count += 1
-    
     name_alt_gen = name_to_alternates.items()
-    
-    
-    # Paths to synonym and keep files for the city analyzer 
-    file_path_keep = os.path.join(elasticsearch_resource_dir, 'city_keep.txt')
-    file_path_syn = os.path.join(elasticsearch_resource_dir, 'city_synonyms.txt')
     
     # Create the resource files (needs sudo rights)
     write_keep_syn(name_alt_gen, file_path_keep, file_path_syn)
@@ -185,11 +206,15 @@ def gen_resource_city():
 # 
 # =============================================================================
 
-def gen_resource_organization():
+def gen_resource_organization(elasticsearch_resource_dir, force=False):
     """Generate resource files for the organization analyzer."""
 
     file_path_keep = os.path.join(elasticsearch_resource_dir, 'es_organization_keep.txt') 
     file_path_syn = os.path.join(elasticsearch_resource_dir, 'es_organization_synonyms.txt')
+    
+    if os.path.isfile(file_path_keep) and os.path.isfile(file_path_syn) and not force:
+        logging.warning(skip_msg.format('organization'))
+        return
     
     org_data = [['lycée', 'lyc', 'préparatoire', 'prépa', 'cpge'], 
      ['collège'], 
@@ -200,6 +225,7 @@ def gen_resource_organization():
      ['laboratoire', 'labo'], 
      ['institut', 'département']]
     
+        
     write_keep_syn(zip([x[0] for x in org_data], org_data), file_path_keep, file_path_syn)
         
     
@@ -207,32 +233,15 @@ def gen_resource_organization():
      ['association', 'groupement'], 
      ['fédération']]
     
-    
-    #import requests
-    #url = 'https://raw.githubusercontent.com/David-Haim/CountriesToCitiesJSON/master/countriesToCities.json'
-    #
-    #try:
-    #    country_to_cities
-    #except:
-    #    country_to_cities = json.loads(requests.get(url).content.decode('utf-8'))
-    #
-    #all_cities = set()
-    #city_to_countries = defaultdict(list)
-    #for country, cities in country_to_cities.items():
-    #    
-    #    if country != '':
-    #        all_cities.update(cities)
-    #        for city in set(cities):
-    #            city_to_countries[city].append(country)
-    #    
-    #    
-
-
-def gen_resource_country():
+def gen_resource_country(elasticsearch_resource_dir, force=False):
     """Generate the resource files  for the country analyzer."""
 
     file_path_keep = os.path.join(elasticsearch_resource_dir, 'countries_keep.txt') 
     file_path_syn = os.path.join(elasticsearch_resource_dir, 'countries_synonyms.txt')
+
+    if os.path.isfile(file_path_keep) and os.path.isfile(file_path_syn) and not force:
+        logging.warning(skip_msg.format('city'))
+        return
     
     url = 'https://raw.githubusercontent.com/mledoze/countries/master/dist/countries.json'
     
@@ -264,29 +273,34 @@ def gen_resource_country():
     
     write_keep_syn(name_alt, file_path_keep, file_path_syn)
 
-def _get_default_conf_dir():
-    """Return the default directory for elasticsearch configuration (in which to)
-    write resource files (usually /etc/elasticsearch).
+
+def generate_resources(analyzers, elasticsearch_resource_dir=None, force=False):
+    """Generate resources for a all analyzers specified within a list.
     
-    Returns
-    -------
-    str or None:
-        Return None when there are multiple directories (multiple nodes). 
-        Otherwise, return the default conf directory path.
+    Parameters
+    ----------
+    analyzers: list of str
+        List of analyzers for which to generate resources.
+    elasticsearch_resource_dir: str
+       Path to the directory in which to write the Elasticsearch config files.
+    force: bool
     """
-    nodes = Elasticsearch().nodes.info()['nodes']
-    resource_dirs = list({node['settings']['default']['path']['conf'] \
-                         for node in nodes.values()})
-    if len(resource_dirs) > 1:
-        elasticsearch_resource_dir = None
-    else:
-        elasticsearch_resource_dir = resource_dirs[0]
-    return elasticsearch_resource_dir
+    
+    if elasticsearch_resource_dir is None:
+        elasticsearch_resource_dir = _get_default_conf_dir()
+        logging('Writing Elasticsearch config files to {}'.format(elasticsearch_resource_dir))
+
+    for analyzer in args.analyzers:
+        if analyzer in RESOURCE_GENERATORS:
+            RESOURCE_GENERATORS[analyzer](elasticsearch_resource_dir, force)
+        else:
+            raise Warning('No resource generator for analyzer: {}'.format(analyzer))
+
+RESOURCE_GENERATORS = {'city': gen_resource_city, 
+                       'country': gen_resource_country,
+                       'organization': gen_resource_organization}
 
 if __name__ == '__main__':
-    
-    resource_generators = {'city': gen_resource_city, 
-                           'country': gen_resource_country}
     
     import argparse
     DESCRIPTION = 'Fetch, transform and write resources for Elasticearch' \
@@ -299,11 +313,14 @@ if __name__ == '__main__':
                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('analyzers', nargs='*', 
                         help='List of analyzers for which to create resources.' \
-                ' Choose from:\n{}'.format(list(resource_generators.keys())), 
-                        default=list(resource_generators.keys()))
+                ' Choose from:\n{}'.format(list(RESOURCE_GENERATORS.keys())), 
+                        default=list(RESOURCE_GENERATORS.keys()))
     parser.add_argument('-d', '--es-resource-dir',  
                         help='Elasticsearch resource directory',
                         default=_get_default_conf_dir())
+    parser.add_argument('-f', '--force',
+                        action='store_true',
+                        help='Force re-creation of existing files.')
             
     args = parser.parse_args()
 
@@ -313,8 +330,4 @@ if __name__ == '__main__':
                            ' Elasticsearch in multiple nodes. Use the -d flag' \
                            ' to specify where to write the resource files')
     
-    for analyzer in args.analyzers:
-        if analyzer in resource_generators:
-            resource_generators[analyzer]()
-        else:
-            raise Warning('No resource generator for analyzer: {}'.format(analyzer))
+    generate_resources(args.analyzers, elasticsearch_resource_dir, args.force)

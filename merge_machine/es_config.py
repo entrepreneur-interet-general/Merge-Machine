@@ -23,7 +23,7 @@ ANALYZERS = {'case_insensitive_keyword': case_insensitive_keyword,
 DEFAULT_ANALYZER = 'case_insensitive_keyword'
 
 # Default analyzers (for columns that should match)
-DEFAULT_CUSTOM_ANALYZERS = {'case_insensitive_keyword', 'integers', 'n_grams'}
+DEFAULT_CUSTOM_ANALYZERS = {'case_insensitive_keyword', 'integers', 'n_grams', 'city', 'country'}
 DEFAULT_STOCK_ANALYZERS = {'french'}
 DEFAULT_ANALYZERS = DEFAULT_CUSTOM_ANALYZERS | DEFAULT_STOCK_ANALYZERS
 

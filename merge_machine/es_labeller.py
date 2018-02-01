@@ -1953,12 +1953,17 @@ class BasicLabeller():
         params['index_name'] = self.ref_index_name
         params['queries'] = [{'template': q._as_tuple(), 
                               'thresh': 0,
-                              'best_thresh': q.thresh,
+                              'best_thresh': q.thresh if q.thresh else 0,
                               'expected_precision': q.precision,
                               'expected_recall': q.recall} \
                                   for q in self.current_queries]
-        params['queries'] = sorted(params['queries'], 
-                              key=lambda x: x['expected_precision'], reverse=True)
+        
+        # Sort queries by precision if possible
+        assert all(x['expected_precision'] is None for x in params['queries']) \
+            or all(x['expected_precision'] is not None for x in params['queries'])
+        if params['queries'][0]['expected_precision'] is not None:
+            params['queries'] = sorted(params['queries'], 
+                          key=lambda x: x['expected_precision'], reverse=True)
 
         params['must'] = self.must_filters
         params['must_not'] = self.must_not_filters
@@ -2261,7 +2266,15 @@ class ConsoleLabeller(Labeller):
     
     MENU_INSTRUCTIONS = '#TODO: write menu instructions'
     
-    LABELLER_INSTRUCTIONS = 'Valid answers are: "y(es)"/"1", "n(o)"/"0", or "p(revious)" / or "q(uit)"'
+    LABELLER_INSTRUCTIONS =     '''Valid answers are:
+    (y)es / 1
+    (n)o / 0
+    (p)revious
+    (u)ncertain
+    (f)orget
+    (quit)
+    (h)elp'''
+
     
     GENERAL_INSTRUCTIONS = 'Switch tab by entering:\n' \
             '"=labeller", "=menu" or "=filter".\n Quit labeller by typing: "quit"\n' \
@@ -2381,16 +2394,16 @@ class ConsoleLabeller(Labeller):
         dict_to_emit = self.to_emit()
     
         if dict_to_emit['query_ranking'] != -1:
-    
-            print('({0}): {1}'.format(dict_to_emit['query_ranking'], dict_to_emit['c_query']))
-            print('Precision: {0}; Recall: {1}; Score: {2}'.format(
+            print('Query: {}'.format(dict_to_emit['c_query']))
+            print('Query ranking: {}'.format(dict_to_emit['query_ranking']))
+            print('Query / Precision: {0}; Recall: {1}; Score: {2}'.format(
                                               dict_to_emit['c_estimated_precision'],
                                               dict_to_emit['c_estimated_recall'],
                                               dict_to_emit['c_estimated_score']))
         
-            print('ES score: {0}; Thresh: {1}; Is match: {2}'.format(dict_to_emit['es_score'],
+            print('Result ES score: {0}; Query thresh: {1}; Is match: {2}'.format(dict_to_emit['es_score'],
                       dict_to_emit['thresh'], dict_to_emit['estimated_is_match']))
-            print('Majority_vote:', dict_to_emit['majority_vote'])
+            # print('Majority_vote:', dict_to_emit['majority_vote'])
     
         print('\n(S): {0}'.format(dict_to_emit['source_idx']))
         print('(R): {0}'.format(dict_to_emit['ref_idx']))

@@ -8,7 +8,7 @@ from merge_machine import es_insert
 from merge_machine.es_labeller import ConsoleLabeller
 from merge_machine.es_match import es_linker
 
-from merge_machine.es_config import DEFAULT_ANALYZER, INDEX_SETTINGS_TEMPLATE
+from merge_machine.es_config import ANALYZERS, DEFAULT_ANALYZER, INDEX_SETTINGS_TEMPLATE
 
 # =============================================================================
 # 0. TUTORIAL DATA CAN BE FOUND HERE:
@@ -93,25 +93,29 @@ match_cols = [{'source': 'commune',
 # keyword analyser. All columns mentioned in columns_to_index will be referenced
 # with the default analyzer.
 # 
-# NB: all the columns used in match_cols for the reference table must be
+# NB.1: all the columns used in match_cols for the reference table must be
 # included in columns_to_index
+#
+# NB.2: Some of the analyzers used below are custom and their definition will 
+# have to be passed during index creation for them to work
 # -----------------------------------------------------------------------------
-
 
 columns_to_index = {
     'departement': {
         'n_grams', 'integers'
     },
     'localite_acheminement_uai': {
-        'french', 'n_grams', 'city'
+        'french', 'n_grams',
     },
     'denomination_principale_uai': {
-        'french', 'integers', 'n_grams', 'city'
+        'french', 'integers', 'n_grams',
     },
     'patronyme_uai': {
-        'french', 'integers', 'n_grams', 'city'
+        'french', 'integers', 'n_grams',
     }
 }
+    
+default_analyzer = 'case_insensitive_keyword'
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Configure the Elasticsearch connection
@@ -129,8 +133,8 @@ force_re_index = True # Usually set to false
 
 # Create the index
 es_insert.create_index(es, ref_table_name, columns_to_index, 
-                       default_analyzer=DEFAULT_ANALYZER, 
-                       analyzer_index_settings=INDEX_SETTINGS_TEMPLATE, 
+                       default_analyzer=default_analyzer,
+                       analyzer_definitions=ANALYZERS,
                        force=force_re_index)
 
 # Insert documents in the index

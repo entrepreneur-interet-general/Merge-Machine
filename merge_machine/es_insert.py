@@ -13,10 +13,10 @@ import logging
 import os
 import time
 
-from elasticsearch import Elasticsearch, client
+from elasticsearch import Elasticsearch, client, RequestError
 import pandas as pd
 
-from .helpers import gen_index_settings
+from .helpers import gen_index_settings, _gen_index_settings_from_analyzers
 
 def pre_process_tab(tab):
     ''' Clean tab before insertion.'''
@@ -27,7 +27,8 @@ def pre_process_tab(tab):
 
 
 def create_index(es, table_name, columns_to_index, default_analyzer='keyword', 
-                 analyzer_index_settings=None, force=False):
+                 analyzer_definitions=None, analyzer_index_settings=None, 
+                 force=False):
     '''Create a new empty Elasticsearch index (used to host documents).
     
     Parameters
@@ -47,11 +48,16 @@ def create_index(es, table_name, columns_to_index, default_analyzer='keyword',
     default_analyzer: str
         The Elasticsearch analyzer to use on all columns being indexed (use 
         `keyword` or similar).
+    analyzer_definitions: dict or None
+        Use analyzer_definitions to generate the index_settings. Input is a 
+        `dict` with keys the analyzer name and values a dict with `tokenizer`, 
+        `filter`, and `analyzer` fields. (Cannot use with analyzer_index_settings)
     analyzer_index_settings: dict or None
         Elasticsearch settings to define custom analyzers if any are used. 
         See Elasticsearch documentation on how to create custom analyzers.
         The object is the dict representation of the object passed on to 
-        Elasticsearch during index creation.
+        Elasticsearch during index creation. (Cannot use with 
+        analyzer_definitions)
     force: bool
         whether or not to delete and re-create an index if the name 
         (`table_name`) is already associated to an existing index.
@@ -62,14 +68,32 @@ def create_index(es, table_name, columns_to_index, default_analyzer='keyword',
     if ic.exists(table_name) and force:
         ic.delete(table_name)
     
+    assert (analyzer_index_settings is None) or (analyzer_definitions is None)
+    
+    # Generate index settings template for custom analyzers that are used
+    # in columns to_index or as default analyzer
+    if analyzer_definitions is not None:
+        custom_analyzers = {y for x in columns_to_index.values() for y in x \
+                            if y in analyzer_definitions}
+        if default_analyzer in analyzer_definitions:
+            custom_analyzers.add(default_analyzer)
+            
+        # Generate the ES settings for all custom analyzers
+        analyzer_index_settings = _gen_index_settings_from_analyzers( \
+                        [analyzer_definitions[x] for x in custom_analyzers])
+    
     if not ic.exists(table_name):
         index_settings = gen_index_settings(default_analyzer, columns_to_index, analyzer_index_settings)
         try:
             ic.create(table_name, body=json.dumps(index_settings))  
-        except Exception as e:
-            new_message = e.__str__() + '\n\n(MERGE MACHINE)--> This may be due to ' \
-                            'ES resource not being available. ' \
-                            'Run es_gen_resource.py (in sudo) for this to work'
+        except RequestError as e:
+            # If the error is caused by a missing config file, propose to 
+            # create the config file 
+            if e.info['error']['caused_by']['type'] == 'file_not_found_exception':
+                new_message = e.__str__() + '\n\n(MERGE MACHINE)--> This may be due to ' \
+                                'ES resource not being available. ' \
+                                'Run es_gen_resource.py (in sudo) for this to work'
+            import pdb; pdb.set_trace()
             raise Exception(new_message)
 
 def update_analyzers(es, table_name, columns_to_index, default_analyzer='keyword', 
