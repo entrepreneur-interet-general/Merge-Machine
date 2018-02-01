@@ -5,6 +5,10 @@
 from .no_resource_analyzer_definitions import case_insensitive_keyword, integers, n_grams
 from .resource_analyzer_definitions import city, country
 
+# Alias for convenience
+from .gen_resources import generate_resources
+
+
 # Name the analyzers to use
 ANALYZERS = {'case_insensitive_keyword': case_insensitive_keyword,
              'integers': integers,
