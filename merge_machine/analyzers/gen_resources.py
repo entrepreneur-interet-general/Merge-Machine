@@ -26,9 +26,6 @@ from unidecode import unidecode
 
 logging.basicConfig(level=logging.INFO)
 
-curdir = os.path.dirname(os.path.realpath(__file__))
-os.chdir(curdir)
-
 # =============================================================================
 # Messages
 # =============================================================================

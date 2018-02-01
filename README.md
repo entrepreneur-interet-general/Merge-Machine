@@ -29,7 +29,11 @@ pip3 install -e .
 
 ## How to use ?
 
+<<<<<<< HEAD
 ### Example (genaral use)
+=======
+### Example (install the package first...)
+>>>>>>> cbe64be69386b108343a959d57751ac5b715c6e6
 See [examples/example.py](https://github.com/eig-2017/Merge-Machine/blob/master/examples/example.py).
 
 ### Example (generate resources to use custom analyzers)
