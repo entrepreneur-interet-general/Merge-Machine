@@ -29,7 +29,7 @@ pip3 install -e .
 
 ## How to use ?
 
-### Example
+### Example (install the package first...)
 See [examples/example.py](https://github.com/eig-2017/Merge-Machine/blob/master/examples/example.py).
 
 ### Guidelines
