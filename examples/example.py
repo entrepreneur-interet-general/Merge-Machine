@@ -12,7 +12,7 @@ from merge_machine.es_config import ANALYZERS, DEFAULT_ANALYZER, INDEX_SETTINGS_
 
 # =============================================================================
 # 0. TUTORIAL DATA CAN BE FOUND HERE:
-## https://github.com/entrepreneur-interet-general/Merge-Machine/tree/master/tests/data_1
+## https://github.com/entrepreneur-interet-general/Merge-Machine/tree/master/examples/data_1
 ## =============================================================================
 
 # =============================================================================
