@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import requests
+import tempfile
 import urllib
 import urllib.request
 
@@ -140,7 +141,6 @@ def write_keep_syn(name_alt_gen, file_path_keep, file_path_syn,
 def gen_resource_city(elasticsearch_resource_dir, force=False):
     '''Generate resource files for the city analyzer'''
     
-    
     # Paths to synonym and keep files for the city analyzer 
     file_path_keep = os.path.join(elasticsearch_resource_dir, 'city_keep.txt')
     file_path_syn = os.path.join(elasticsearch_resource_dir, 'city_synonyms.txt')
@@ -149,25 +149,17 @@ def gen_resource_city(elasticsearch_resource_dir, force=False):
         logging.warning(skip_msg.format('city'))
         return
 
-    file_path = os.path.join('resource', 'es_linker', 
-                             'geonames-all-cities-with-a-population-1000.json')
+    url = 'https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000@public/download/?format=json&timezone=Europe/Berlin&use_labels_for_header=true'
+    handle, file_path = tempfile.mkstemp()
+    if not demand_confirmation('100M', url, file_path):
+        logging.warning('Aborting resource generation for "city" analyzer')
+        return
 
-    # Check that resource is available
-    if not os.path.isfile(file_path):
-        url = 'https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000@public/download/?format=json&timezone=Europe/Berlin&use_labels_for_header=true'
-        if not demand_confirmation('100M', url, file_path):
-            logging.warning('Aborting resource generation for "city" analyzer')
-            return
+    # TODO: change for CSV, take less space...
+    # View data here https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000%40public/export
+    logging.info('Downloading resource (100M) from:\n{0}\nWriting to:\n{1}\nThis may take some time...'.format(url, file_path))
 
-        if not os.path.isdir(os.path.split(file_path)[0]):
-            os.makedirs(os.path.split(file_path)[0])
-        # TODO: change for CSV, take less space...
-        # View data here https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000%40public/export
-        logging.info('Downloading resource (100M) from:\n{0}\nWriting to:\n{1}\nThis may take some time...'.format(url, file_path))
-        urllib.request.urlretrieve(url, file_path)
-    else:
-        logging.info('File {} already exists. Using this version.'.format(file_path))
-        
+    urllib.request.urlretrieve(url, file_path)
     with open(file_path) as f:
         res = json.load(f)
     
@@ -284,9 +276,9 @@ def generate_resources(analyzers, elasticsearch_resource_dir=None, force=False):
     
     if elasticsearch_resource_dir is None:
         elasticsearch_resource_dir = _get_default_conf_dir()
-        logging('Writing Elasticsearch config files to {}'.format(elasticsearch_resource_dir))
+        logging.info('Writing Elasticsearch config files to {}'.format(elasticsearch_resource_dir))
 
-    for analyzer in args.analyzers:
+    for analyzer in analyzers:
         if analyzer in RESOURCE_GENERATORS:
             RESOURCE_GENERATORS[analyzer](elasticsearch_resource_dir, force)
         else:

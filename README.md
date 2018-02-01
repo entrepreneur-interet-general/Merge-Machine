@@ -29,8 +29,11 @@ pip3 install -e .
 
 ## How to use ?
 
-### Example
+### Example (genaral use)
 See [examples/example.py](https://github.com/eig-2017/Merge-Machine/blob/master/examples/example.py).
+
+### Example (generate resources to use custom analyzers)
+See [examples/gen\_resource\_example.py](https://github.com/eig-2017/Merge-Machine/blob/master/examples/gen_resource_example.py).
 
 ### Guidelines
 See [HOW\_TO.md](https://github.com/eig-2017/Merge-Machine/blob/master/HOW_TO.md).
