@@ -85,7 +85,7 @@ match_cols = [{'source': 'commune',
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # -----------------------------------------------------------------------------
-# # How to use columns to index ?
+# # How to use columns_to_index?
 #
 # The keys of this dictionnary are columns of the reference table. The values
 # are elasticsearch analyzers that will be used to compare values being matched
@@ -99,6 +99,7 @@ match_cols = [{'source': 'commune',
 # NB.2: Some of the analyzers used below are custom and their definition will 
 # have to be passed during index creation for them to work
 # -----------------------------------------------------------------------------
+
 
 columns_to_index = {
     'departement': {
@@ -114,7 +115,13 @@ columns_to_index = {
         'french', 'integers', 'n_grams',
     }
 }
-    
+
+# -----------------------------------------------------------------------------
+# # How to use default_analyzer?
+#
+# The default analyzer will be used on all columns being indexed.
+# -----------------------------------------------------------------------------
+
 default_analyzer = 'case_insensitive_keyword'
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
