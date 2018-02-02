@@ -494,6 +494,7 @@ class CoreScorerQueryTemplate(SingleQueryTemplate):
         self.source_lens = []
         self.ref_lens = []
         self.intersect_lens = []
+        self.is_match = []
     
     def _sanity_check(self):
         assert len(self.source_lens) \
@@ -523,7 +524,8 @@ class CoreScorerQueryTemplate(SingleQueryTemplate):
 
         return len(tokens_source), len(tokens_ref), len(tokens_source & tokens_ref)
     
-    def add_labelled_pair_items(self, es, index_name, source_item, ref_item):
+    def add_labelled_pair_items(self, es, index_name, 
+                                source_item, ref_item, is_match=True):
         """Update the instance with a user labelled pair.
         
         Parameters
@@ -536,15 +538,35 @@ class CoreScorerQueryTemplate(SingleQueryTemplate):
             The source item
         ref_item: `pandas.Series` or `dict` shaped as {column: value, ...}
             The reference item labelled as match with `source_item`
+        is_match: bool
+            Whether or not the pair that was passed is a match 
         """
         l_s, l_r, l_i = self.analyze_pair_items(es, index_name, source_item, ref_item)
         
         self.source_lens.append(l_s)
         self.ref_lens.append(l_r)
         self.intersect_lens.append(l_i)
+        self.is_match.append(is_match)
         
-        # Score is mean number of intersections
-        self.score = sum(x > 0 for x in self.intersect_lens) / len(self.intersect_lens)
+        self.update_score()
+    
+    def update_score(self):
+        """Update the score for this query template."""
+        
+        # Score is mean number of intersections on match
+        match_intersect_lens = [x for x, y in zip(self.intersect_lens, self.is_match) if y]
+        self.score = sum(x > 0 for x in match_intersect_lens) / len(match_intersect_lens)
+        
+        # Yes or None on match score. Proportion of matches that have at least
+        # one token in common or no token in common.
+        source_inter_lens = [x for x, y in zip(self.source_lens, self.is_match) if y]
+        ref_inter_lens = [x for x, y in zip(self.ref_lens, self.is_match) if y]
+        inter_lens = [x for x, y in zip(self.intersect_lens, self.is_match) if y]
+        self.yes_or_none_score = sum((i>0) or (s==0) or (r==0)  \
+                 for (i, s, r) in zip(source_inter_lens, ref_inter_lens, inter_lens)) \
+                 / len(inter_lens)
+        
+        # NB: no need to use yes or None if already using the core as must
         
     def to_dict(self):
         """Returns a dict representation of the instance."""
@@ -556,7 +578,7 @@ class CoreScorerQueryTemplate(SingleQueryTemplate):
         dict_['source_lens'] = self.source_lens
         dict_['ref_lens'] = self.ref_lens
         dict_['intersect_lens'] = self.intersect_lens
-    
+        dict_['is_match'] = self.is_match
         return dict_
     
     
@@ -573,7 +595,7 @@ class CoreScorerQueryTemplate(SingleQueryTemplate):
         csqt.source_lens = dict_['source_lens']
         csqt.ref_lens = dict_['ref_lens']
         csqt.intersect_lens = dict_['intersect_lens']
-        
+        csqt.is_match = dict_['is_match']
         return csqt
         
 
@@ -1116,9 +1138,9 @@ class BasicLabeller():
         ----------
         queries_to_perform: list of instances of `CompoundQueryTemplate`
         row: `pandas.Series` or `dict` like {column: value, ...}
-            Elements to search for in query
+            Elements to search for in query.
         num_results: int
-            Maximum number of elements to return using the Elasticsearch query
+            Maximum number of elements to return using the Elasticsearch query.
         """
         
         results = {}
@@ -1401,7 +1423,7 @@ class BasicLabeller():
         ----------
         labelled_pair: tuple of len 2
             The labelled pair. One of:
-                + (source_id, ref_id) (if a match was found)
+                + (source_id, ref_id) (the corresponding ref if a match was found)
                 + (source_id, '__FORGET')
                 + (source_id, '__NO_RESULT')
         """
