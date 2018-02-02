@@ -2,3 +2,4 @@ unidecode
 pandas
 numpy
 elasticsearch
+requests
