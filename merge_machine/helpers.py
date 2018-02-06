@@ -110,7 +110,7 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
           'query': {
             'bool': dict({
                must_or_should: [
-                          {'match': {
+                          {'common': {
                                   s_q_t[2] + s_q_t[3]: {'query': _remove_words(' '.join(row[idx] for idx in s_q_t[1] if isinstance(row[idx], str)), must_filters.get(s_q_t[2], [])),
                                                         'boost': s_q_t[4]}}
                           } \
@@ -121,6 +121,8 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
                         + [
                           {'multi_match': {
                                   'fields': [col + s_q_t[3] for col in s_q_t[2]], 
+                                  "type": "cross_fields",
+                                  "tie_breaker": 0,
                                   'query': _remove_words(' '.join(row[idx] for idx in s_q_t[1] if isinstance(row[idx], str)), []),
                                   'boost': s_q_t[4]
                                   }
