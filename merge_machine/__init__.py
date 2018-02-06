@@ -11,5 +11,3 @@ class NotSupportedException(BaseException): pass
 
 if version_info.major < 3:
     raise NotSupportedException("Only Python 3.x Supported")  
-
-from . import analyzers
