@@ -389,6 +389,7 @@ def es_linker(es, source, params):
         exact_matches_in_ref['__ID_REF'] = exact_ref_indices
         exact_matches_in_ref['__ES_SCORE'] = 999
         exact_matches_in_ref['__CONFIDENCE'] = 999
+        exact_matches_in_ref['__IS_MATCH'] = True
         
     else:
         exact_matches_in_ref = pd.DataFrame()
