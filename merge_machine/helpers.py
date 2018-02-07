@@ -110,9 +110,13 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
           'query': {
             'bool': dict({
                must_or_should: [
-                          {'common': {
-                                  s_q_t[2] + s_q_t[3]: {'query': _remove_words(' '.join(row[idx] for idx in s_q_t[1] if isinstance(row[idx], str)), must_filters.get(s_q_t[2], [])),
-                                                        'boost': s_q_t[4]}}
+                          {'match': {
+                                  s_q_t[2] + s_q_t[3]: {
+                                                        'query': _remove_words(' '.join(row[idx] for idx in s_q_t[1] if isinstance(row[idx], str)), must_filters.get(s_q_t[2], [])),
+                                                        'boost': s_q_t[4],
+                                                        'cutoff_frequency': 0.001
+                                                        }
+                                     }
                           } \
                           for s_q_t in query_template if (s_q_t[0] == must_or_should) \
                                       and isinstance(s_q_t[2], str)
@@ -124,7 +128,8 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
                                   "type": "cross_fields",
                                   "tie_breaker": 0,
                                   'query': _remove_words(' '.join(row[idx] for idx in s_q_t[1] if isinstance(row[idx], str)), []),
-                                  'boost': s_q_t[4]
+                                  'boost': s_q_t[4],
+                                  'cutoff_frequency': 0.001
                                   }
                           } \
                           for s_q_t in query_template if (s_q_t[0] == must_or_should) \
