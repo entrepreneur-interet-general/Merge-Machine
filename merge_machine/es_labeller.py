@@ -2150,35 +2150,67 @@ class SearchLabeller(BasicLabeller):
         max_num_results: int
             The maximum number of results to append for a search.
         """
-        DEFAULT_SEARCH_ANALYZER = '.french'
-        query_template = [('must', key, key, DEFAULT_SEARCH_ANALYZER, 1) for key in search_params]
         
+        # Get search analyzers
+        ic = client.IndicesClient(self.es)
+        mappings = ic.get_mapping(self.ref_index_name)[self.ref_index_name]['mappings']['structure']['properties']
+        analyzers = {col: set(mappings[col]['fields'].keys()) for col in mappings.keys()}
+        
+        # De-duplicate search_params
+        search_params = {col: set(values) for col, values in search_params.items()}
+        
+        # Create row to search for and query templates
         row = dict()
-        for key, value in search_params.items():
-            if isinstance(value, str):
-                value = [value]
-            if isinstance(key, str):
-                row[key] = ' '.join(value)
-            else:
-                for i, k in enumerate(key):
-                    if i == 0:
-                        row[k] = ' '.join(value)
-                    else:
-                        row[k] = None
+        tmp = defaultdict(list)
+        for ref_cols, values in search_params.items():
+            
+            if isinstance(values, str):
+                values = [values]
+            if isinstance(ref_cols, str):
+                ref_cols = [ref_cols]
+            
+            # Determin the analyzers to use
+            col_analyzers = set()
+            for k in ref_cols:
+                print('k is: ', k)
+                print('analyzers[k] is:', analyzers[k])
+                col_analyzers.update(analyzers[k])  
+                    
+            for i, val in enumerate(values):
+                # Create separate columns in source for each value to avoid
+                # automatic concatenation
+                source_col = ref_cols[0] + '__' + str(i)
+                row[source_col] = val
+                
+                for analyzer in col_analyzers:
+                    s_q_t = ('must', source_col, ref_cols, '.'+analyzer, 1)
+                    # Tmp stores the query templates that can be used for 
+                    
+                    tmp[source_col].append(s_q_t)
         
-        body = _gen_body(query_template, row, num_results=max_num_results) # TODO: add global filters ?
+        print(list(itertools.product(*tmp.values())))
+        print('\n\n', list(itertools.product(*tmp.values()))[0], '\n\n')
         
-        print(query_template)
-        print(row)
-        print(search_params)
-        print(body)
+        query_templates = [CompoundQueryTemplate(x) for x in itertools.product(*tmp.values())]
+        print('len of query_templates', len(query_templates))   
+        
+        print('query_templates[0]', query_templates[0])
+        print('[row]', [row])
+        res = self._bulk_search(query_templates, row, num_results=max_num_results) # TODO: add global filters ?
+        
+        print('\nQuery template:\n', query_templates)
+        print('\nRow:\n', row)
+        print('\nSearch params template:\n', search_params)
+        
         # Remove previous results of search
         self.clear_custom_search()
+    
+        # Flatten
+        res = [y for x in res for y in x]
         
-        res = self.es.search(self.ref_index_name, body=body)['hits']['hits']
+        # Order by best of each template #TODO:
         
-        print(res)
-        print('Len res:', len(res))
+        print('\nLen res:', len(res))
         
         self._add_searches(res, replace_current=True)
         
