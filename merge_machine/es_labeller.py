@@ -2154,7 +2154,11 @@ class SearchLabeller(BasicLabeller):
         # Get search analyzers
         ic = client.IndicesClient(self.es)
         mappings = ic.get_mapping(self.ref_index_name)[self.ref_index_name]['mappings']['structure']['properties']
-        analyzers = {col: set(mappings[col]['fields'].keys()) for col in mappings.keys()}
+        analyzers = {col: set(mappings[col].get('fields', {}).keys()) for col in mappings.keys()}
+        for col in analyzers:
+            from pprint import pprint
+            pprint(mappings)
+            analyzers[col].add(mappings[col]['analyzer'])
         
         # De-duplicate search_params
         search_params = {col: set(values) for col, values in search_params.items()}
