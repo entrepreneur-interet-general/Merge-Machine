@@ -2151,6 +2151,8 @@ class SearchLabeller(BasicLabeller):
             The maximum number of results to append for a search.
         """
         
+        EXCLUDED_ANALYZERS = ['n_grams']
+        
         # Get search analyzers
         ic = client.IndicesClient(self.es)
         mappings = ic.get_mapping(self.ref_index_name)[self.ref_index_name]['mappings']['structure']['properties']
@@ -2160,8 +2162,10 @@ class SearchLabeller(BasicLabeller):
             pprint(mappings)
             analyzers[col].add(mappings[col]['analyzer'])
         
-        # De-duplicate search_params
-        search_params = {col: set(values) for col, values in search_params.items()}
+        # De-duplicate search_params and remove unwanted analyzers
+        search_params = {col: set(\
+                        filter(lambda x: x not in EXCLUDED_ANALYZERS, values))\
+                        for col, values in search_params.items()}
         
         # Create row to search for and query templates
         row = dict()
