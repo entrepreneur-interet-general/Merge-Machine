@@ -102,6 +102,7 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
     #==========================================================================
     
     DEFAULT_FILTER_FIELD = '.french' # TODO: replace by standard or whitespace
+    # CUTOFF_FREQ = 0.001
     
     query_template = [_reformat_s_q_t(s_q_t) for s_q_t in query_template]
 
@@ -114,7 +115,7 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
                                   s_q_t[2] + s_q_t[3]: {
                                                         'query': _remove_words(' '.join(row[idx] for idx in s_q_t[1] if isinstance(row[idx], str)), must_filters.get(s_q_t[2], [])),
                                                         'boost': s_q_t[4],
-                                                        'cutoff_frequency': 0.001
+                                                        #'cutoff_frequency': CUTOFF_FREQ
                                                         }
                                      }
                           } \
@@ -125,11 +126,11 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
                         + [
                           {'multi_match': {
                                   'fields': [col + s_q_t[3] for col in s_q_t[2]], 
-                                  "type": "cross_fields",
-                                  "tie_breaker": 0,
+                                  #"type": "best_fields",#"cross_fields",
+                                  #"tie_breaker": 0,
                                   'query': _remove_words(' '.join(row[idx] for idx in s_q_t[1] if isinstance(row[idx], str)), []),
                                   'boost': s_q_t[4],
-                                  'cutoff_frequency': 0.001
+                                  #'cutoff_frequency': CUTOFF_FREQ
                                   }
                           } \
                           for s_q_t in query_template if (s_q_t[0] == must_or_should) \
