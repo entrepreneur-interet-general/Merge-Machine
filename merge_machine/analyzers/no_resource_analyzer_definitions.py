@@ -69,13 +69,18 @@ integers = {
             "type": "pattern_replace",
             "pattern": "^0+(.*)",
             "replacement": "$1"
+        },
+        "up_to_5_shingle": {
+            	"type": "shingle",
+             "token_separator": "",
+             "max_shingle_size": 5             
         }
     }, 
         
     'analyzer': {     
         "integers": {
             'tokenizer': 'integers',
-            'filter': ['leading_zero_trim']
+            'filter': ['leading_zero_trim', "up_to_5_shingle"]
             }
     }
 }
