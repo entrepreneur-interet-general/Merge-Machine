@@ -2161,11 +2161,11 @@ class SearchLabeller(BasicLabeller):
         
         # Create row to search for and query templates
         row = dict()
-        tmp = defaultdict(list)
-        for ref_cols, values in search_params.items():
+        tmp = dict()
+        for ref_cols, words in search_params.items():
             
-            if isinstance(values, str):
-                values = [values]
+            if isinstance(words, str):
+                words = [words]
             if isinstance(ref_cols, str):
                 ref_cols = [ref_cols]
             
@@ -2175,30 +2175,35 @@ class SearchLabeller(BasicLabeller):
                 print('k is: ', k)
                 print('analyzers[k] is:', analyzers[k])
                 col_analyzers.update(analyzers[k])  
-                    
-            for i, val in enumerate(values):
-                # Create separate columns in source for each value to avoid
-                # automatic concatenation
-                source_col = ref_cols[0] + '__' + str(i)
-                row[source_col] = val
+                   
+            source_col = sorted(ref_cols)[0]
+            tmp[source_col] = []
+            for analyzer in col_analyzers:
+                tmp_analyzer = []
+                for i, word in enumerate(words):
+                    # Create separate columns in source for each value to avoid
+                    # automatic concatenation
+                    source_col_val = source_col + '__' + str(i)
+                    row[source_col_val] = word
                 
-                for analyzer in col_analyzers:
-                    s_q_t = ('must', source_col, ref_cols, '.'+analyzer, 1)
+                    s_q_t = ('must', source_col_val, ref_cols, '.'+analyzer, 1)
                     # Tmp stores the query templates that can be used for 
                     
-                    tmp[source_col].append(s_q_t)
+                    tmp_analyzer.append(s_q_t)
+                tmp[source_col].append(tmp_analyzer)
         
-        print(list(itertools.product(*tmp.values())))
-        print('\n\n', list(itertools.product(*tmp.values()))[0], '\n\n')
-        
-        query_templates = [CompoundQueryTemplate(x) for x in itertools.product(*tmp.values())]
+        template_tuples = [(z for y in x for z in y) for x in itertools.product(*tmp.values())]
+        query_templates = [CompoundQueryTemplate(x) for x in template_tuples]
         print('len of query_templates', len(query_templates))   
         
-        print('query_templates[0]', query_templates[0])
-        print('[row]', [row])
-        res = self._bulk_search(query_templates, row, num_results=max_num_results) # TODO: add global filters ?
+        print('len query_templates[0]', len(query_templates))
         
-        print('\nQuery template:\n', query_templates)
+        if len(query_templates) <= 10:
+            search_func = self._bulk_search
+        else:
+            search_func = self.pruned_bulk_search
+        res = search_func(query_templates, row, num_results=max_num_results) # TODO: add global filters ?
+        
         print('\nRow:\n', row)
         print('\nSearch params template:\n', search_params)
         
