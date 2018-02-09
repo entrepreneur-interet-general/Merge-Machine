@@ -667,7 +667,7 @@ class BasicLabeller():
                  }
     
     MAX_NUM_LEVELS = 3 # Number of match clauses
-    MIN_NUM_QUERIES = 9 # Minimum number of queries to try out
+    MIN_NUM_QUERIES = 3 # Minimum number of queries to try out
     BOOL_LEVELS = {'.integers': ['must', 'should'], 
                    '.city': ['must', 'should']}
     BOOST_LEVELS = [1]
@@ -1062,8 +1062,13 @@ class BasicLabeller():
                                 item = self._fetch_ref_item(pair[1])
                                 es_score = 1.23456789
                             
-                            
-                            yield pair[1], item, es_score
+                            # Yield only if probable enough
+                            if query.thresh is not None:
+                                if es_score >= (query.thresh / 2):
+                                    yield pair[1], item, es_score
+                            else:
+                                yield pair[1], item, es_score
+                                
                         # TODO: check that source idx is same as in source_gen
         self.ref_gen = temp()        
 
@@ -1885,7 +1890,7 @@ class BasicLabeller():
     @_query_counter_wrapper   
     def filter_by_precision(self):
         """Filter current_queries based on their precision."""
-        MIN_PRECISION_TAB = [(20, 0.7), (10, 0.5), (5, 0.3)]
+        MIN_PRECISION_TAB = [(20, 0.5), (10, 0.4), (5, 0.3)]
         def _min_precision(self):
             """
             Return the minimum precision to keep a query template, according to 
@@ -1900,10 +1905,13 @@ class BasicLabeller():
         
         precisions = [x.precision for x in self.current_queries]
         sorted_indices = sorted(range(len(precisions)), key=lambda x: precisions[x], reverse=True)
-        
+
         indices_to_keep = [i for i, x in enumerate(self.current_queries) \
                                if x.precision >= _min_precision(self)]
         indices_to_keep += sorted_indices[len(indices_to_keep): self.MIN_NUM_QUERIES]
+        print(len(sorted_indices))
+        print(_min_precision(self))
+        print(indices_to_keep)
         
         # Complex maneuver to avoid copying self.current_queries #TODO: change this ?
         self.current_queries = [x for i, x in enumerate(self.current_queries) \
