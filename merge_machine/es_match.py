@@ -125,7 +125,7 @@ def _deduplicate(tab, columns, min_diff_prop=0):
         A table where only the first copy of each duplicate is returned. Index
         is preserved from the original table.
     indices: dict
-        For the rows that were left out, assign to the index of the row the 
+        For all the rows, assign to the index of the row the 
         index of the duplicate row that was kept.
     '''
     
@@ -140,7 +140,7 @@ def _deduplicate(tab, columns, min_diff_prop=0):
     if len(grp) >= len(tab) * (1-min_diff_prop):
         return None, None
         
-    indices = {}
+    indices = dict()
     for _, grp_tab in grp:
         small_tab = small_tab.append([grp_tab.iloc[0]])
         indices.update({idx: grp_tab.index[0] for idx in grp_tab.index})
@@ -159,8 +159,7 @@ def _re_duplicate(tab, small_tab, indices):
     join_col = '__SOURCE_GROUP'
     
     tab[join_col] = [indices[idx] for idx in tab.index]
-    tab = tab.merge(small_tab, left_on=join_col, right_index=True)
-
+    tab = tab.merge(small_tab, left_on=join_col, right_index=True, how='left')
     
     return tab
 
