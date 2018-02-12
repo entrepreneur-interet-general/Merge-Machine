@@ -10,7 +10,7 @@ import json
 import logging
 import random
 
-from elasticsearch import client
+from elasticsearch import client, RequestError
 import numpy as np
 
 from .helpers import _gen_body, _bulk_search, _key_val_er, _un_key_val_er
@@ -505,10 +505,14 @@ class CoreScorerQueryTemplate(SingleQueryTemplate):
     def _analyze(es, index_name, analyzer, text):
         """Analyze text using Elasticsearch"""
         ic = client.IndicesClient(es)
-        if analyzer:
-            return ic.analyze(index_name, body={'text': text, 'analyzer': analyzer})
-        else:
-            return ic.analyze(index_name, body={'text': text})
+        try:
+            if analyzer:
+                return ic.analyze(index_name, body={'text': text, 'analyzer': analyzer})
+            else:
+                return ic.analyze(index_name, body={'text': text})
+        except RequestError:
+            logging.warning('No analyzer {0} for index {1}'.format(analyzer, index_name))
+            return {'tokens': []}
         
     def analyze_pair_items(self, es, index_name, source_item, ref_item):
         """Count tokens (from `_analyze`) for source, ref and the intersection 
