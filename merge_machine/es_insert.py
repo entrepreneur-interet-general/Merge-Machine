@@ -93,7 +93,6 @@ def create_index(es, table_name, columns_to_index, default_analyzer='keyword',
                 new_message = e.__str__() + '\n\n(MERGE MACHINE)--> This may be due to ' \
                                 'ES resource not being available. ' \
                                 'Run es_gen_resource.py (in sudo) for this to work'
-            import pdb; pdb.set_trace()
             raise Exception(new_message)
 
 def update_analyzers(es, table_name, columns_to_index, default_analyzer='keyword', 
@@ -168,83 +167,3 @@ def index(es, ref_gen, table_name, testing=False, file_len=0, action='index'):
         ic.put_settings(default_refresh, table_name)        
         es.indices.refresh(index=table_name)
 
-
-
-if __name__ == '__main__':
-    
-    columns_to_index = {
-        'SIEGE': {},
-        'SIRET': {},
-        'SIREN': {},
-        'NIC': {},
-        'L1_NORMALISEE': {
-            'french', 'whitespace', 'integers', 'n_grams', 'city'
-        },
-        'L4_NORMALISEE': {
-            'french', 'whitespace', 'integers', 'n_grams'
-        },
-        'L6_NORMALISEE': {
-            'french', 'whitespace', 'integers', 'n_grams'
-        },
-        'L1_DECLAREE': {
-            'french', 'whitespace', 'integers', 'n_grams', 'city'
-        },
-        'L4_DECLAREE': {
-            'french', 'whitespace', 'integers', 'n_grams'
-        },
-        'L6_DECLAREE': {
-            'french', 'whitespace', 'integers', 'n_grams'
-        },
-        'LIBCOM': {
-            'french', 'whitespace', 'n_grams', 'city'
-        },
-        'CEDEX': {},
-        'ENSEIGNE': {
-            'french', 'whitespace', 'integers', 'n_grams', 'city'
-        },
-        'NOMEN_LONG': {
-            'french', 'whitespace', 'integers', 'n_grams', 'city'
-        },
-        #Keyword only 'LIBNATETAB': {},
-        'LIBAPET': {},
-        'PRODEN': {},
-        'PRODET': {}
-    }
-        
-
-    #==============================================================================
-    # Index in Elasticsearch 
-    #==============================================================================
-    testing = False
-    force = True
-    do_indexing = True
-    chunksize = 2000
-    
-    ref_file_name = 'sirene_filtered.csv' # 'petit_sirene.csv'
-    ref_sep = ',' #';'
-    ref_encoding = 'utf-8' #'windows-1252'
-    
-    if testing:
-        nrows = 10000
-    else:
-        nrows = 10**10
-    
-    ref_gen = pd.read_csv(os.path.join('local_test_data', 'sirene', ref_file_name), 
-                      sep=ref_sep, encoding=ref_encoding,
-                      usecols=columns_to_index.keys(),
-                      dtype=str, chunksize=chunksize, nrows=nrows) 
-    
-    
-    if testing:
-        table_name = '123vivalalgerie4'
-    else:
-        table_name = '123vivalalgerie2'
-    
-    es = Elasticsearch(timeout=60, max_retries=10, retry_on_timeout=True)
-    
-    # https://www.elastic.co/guide/en/elasticsearch/reference/1.4/analysis-edgengram-tokenizer.html
-
-    create_index(es, table_name, columns_to_index, force)
-
-    if do_indexing:
-        index(ref_gen, table_name, testing)

@@ -122,7 +122,7 @@ columns_to_index = {
 # The default analyzer will be used on all columns being indexed.
 # -----------------------------------------------------------------------------
 
-default_analyzer = 'case_insensitive_keyword'
+default_analyzer = 'special_keyword'
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Configure the Elasticsearch connection

@@ -295,6 +295,7 @@ def _gen_index_settings_from_analyzers(analyzers):
         "settings": {
             "analysis": {
                 "tokenizer": {},
+                "char_filter": {},
                 "filter": {},
                 "analyzer": {}
             }
@@ -302,7 +303,7 @@ def _gen_index_settings_from_analyzers(analyzers):
     }
     
     for analyzer in analyzers:
-        for key in ['tokenizer', 'filter', 'analyzer']:
+        for key in ['tokenizer', 'filter', 'char_filter', 'analyzer']:
             # TODO: check that keys are not overwritten
             index_settings_template['settings']['analysis'][key].update(analyzer.get(key, {}))
     return index_settings_template

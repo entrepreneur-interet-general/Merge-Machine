@@ -8,15 +8,111 @@ Created on Wed Nov 29 14:59:43 2017
 Custom analyzers for Elasticsearch. No external resource required.
 """
 
+
+# =============================================================================
+# MY FRENCH
+# French analyzer with extra knowledge to match establishments
+# =============================================================================
+french_estab = {
+      "filter": {
+        "french_elision": {
+          "type":         "elision",
+          "articles_case": True,
+          "articles": [
+              "l", "m", "t", "qu", "n", "s",
+              "j", "d", "c", "jusqu", "quoiqu",
+              "lorsqu", "puisqu"
+            ]
+        },
+        "french_stop": {
+          "type":       "stop",
+          "stopwords":  "_french_"
+        },
+        "french_useless": { # words that usually add more noise than anything else
+         "type":        "stop",
+         "stopwords": ["cedex", "sas", "sarl", "eurl", "sa"]
+        },
+        "french_abbrev": {
+          "type":       "synonym",
+          "synonyms":   ['agric, agri => agricole',
+                         'agro => agronomique',
+                         'assoc, ass, asso => association',
+                         'auto, autos, automobiles => automobile',
+                         'bat => batiment',
+                         'coop => cooperative',
+                         'ctre => centre',
+                         'grp, groupement => groupe',
+                         'copro, coprop, cop, coproprietaires, copr => copropriete',
+                         'dep => departement',
+                         'dir, directeur => direction',
+                         'elec => electrique',
+                         'etab => etablissement',
+                         'fr, francais => fra',
+                         'gen => general',
+                         'gym => gymnastique',
+                         'immo => immobilier',
+                         'indust => industrie',
+                         'invest => investissement',
+                         'loc => location, local',
+                         'lyc => lycee',
+                         'med => medical',
+                         'music => musique',
+                         'nat => national, naturel',
+                         'prod => production',
+                         'pub, publ, public => publique',
+                         'reg => region',
+                         'res => residence',
+                         'soc => social, societe',
+                         'synd, syndic, syndicale => syndicat',
+                         'tech => technologie']
+        },
+        "french_acronyms": {
+          "type":       "synonym",
+          "synonyms":   ['cnrs => centre national de la recherche scientifique',
+                         'inra => institut national de la recherche agronomique',
+                         "cea => commissariat à l'énergie atomique et aux énergies alternatives",
+                         'inserm => institut national de la santé et de la recherche médicale',
+                         'inria => institut national de recherche en informatique et en automatique']           
+        },
+        "french_stemmer": {
+          "type":       "stemmer",
+          "language":   "light_french"
+        }
+      },
+      "analyzer": {
+        "french_estab": {
+          "tokenizer":  "standard",
+          "filter": [
+            "french_elision",
+            "lowercase",
+            "french_stop",
+            "french_useless",
+            "french_abbrev",
+            "french_acronyms",
+            #"french_keywords",
+            "french_stemmer"
+          ]
+        }
+      }
+    }
+
+
 # =============================================================================
 # CASE INSENSITIVE KEYWORD ANALYZER
 # The analyzer looks for exact match versions in the lowercased text
 # =============================================================================
 
-case_insensitive_keyword = {
-     'analyzer': {
-            "case_insensitive_keyword": {
+special_keyword = {
+     "char_filter": {
+             "special_char_filter": {
+                "type": "mapping",
+                "mappings": ["-=>\\u0020", "é => e", "è => e", "ê => e", "ë => e", "à=>a", "ü=>u"]
+                }
+             },
+     "analyzer": {
+            "special_keyword": {
                 'tokenizer': 'keyword',
+                'char_filter': ['special_char_filter'],
                 'filter': ['lowercase']
              } 
             }

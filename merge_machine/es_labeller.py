@@ -585,7 +585,6 @@ class CoreScorerQueryTemplate(SingleQueryTemplate):
         dict_['is_match'] = self.is_match
         return dict_
     
-    
     @classmethod
     def from_dict(cls, dict_):
         """Returns an instance of the class using a representation generated 
@@ -601,8 +600,7 @@ class CoreScorerQueryTemplate(SingleQueryTemplate):
         csqt.intersect_lens = dict_['intersect_lens']
         csqt.is_match = dict_['is_match']
         return csqt
-        
-
+    
 
 class BasicLabeller():
     """Object used for interactive learning of optimal queries to match two
@@ -672,7 +670,7 @@ class BasicLabeller():
     
     MAX_NUM_LEVELS = 3 # Number of match clauses
     MIN_NUM_QUERIES = 3 # Minimum number of queries to try out
-    BOOL_LEVELS = {'.integers': ['must', 'should'], 
+    BOOL_LEVELS = {'.integers': ['must', 'should'], # Analyzers with "should"
                    '.city': ['must', 'should']}
     BOOST_LEVELS = [1]
     
@@ -2309,10 +2307,15 @@ class SearchLabeller(BasicLabeller):
             
             self._extract_custom_search()
 
-            # Change current proposal
-            (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
-    
-
+            try: 
+                (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
+            except StopIteration:
+                print(self.current_source_item)
+                print('WARNING: no results found for this row; skipping')
+                self._update_row_count(True, False) # TODO: not tested! 
+                self._next_row()
+            
+            
 class Labeller(SearchLabeller):
     '''Keep this for compatibility.'''
     pass
