@@ -30,7 +30,7 @@ french_estab = {
         },
         "french_useless": { # words that usually add more noise than anything else
          "type":        "stop",
-         "stopwords": ["cedex", "sas", "sarl", "eurl", "sa"]
+         "stopwords": ["cedex", "sas", "sarl", "eurl", "sa", "limited"]
         },
         "french_abbrev": {
           "type":       "synonym",
