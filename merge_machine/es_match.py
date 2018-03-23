@@ -21,11 +21,12 @@ Problem with precision when no match found during labelling
 
 """
 
+import itertools
+
 import numpy as np
 import pandas as pd
 
 from .helpers import _bulk_search
-
 
 
 def _is_match(resp, thresh):
@@ -146,7 +147,6 @@ def _deduplicate(tab, columns, min_diff_prop=0):
         indices.update({idx: grp_tab.index[0] for idx in grp_tab.index})
     
     return small_tab, indices
-        
 
 def _re_duplicate(tab, small_tab, indices):
     '''Takes the output of `deduplicate` and recreates the table of the original
@@ -210,7 +210,6 @@ def _priority_bulk_search(es, index_name, all_queries, rows, must_filters, must_
         query in `og_search_templates` (Ex: `full_responses[4]` is the result 
         when searching for `og_search_templates[4]`).
     '''
-    import itertools
     
     full_responses = dict()
     all_queries = list(all_queries)
@@ -368,6 +367,7 @@ def es_linker(es, source, params):
         #        matches_in_ref['__GAP_RATIO'] = confidence_gap / confidence
         
         # Put confidence to zero for user labelled negative pairs
+        # TODO: get next result instead
         sel = [x in non_matching_pairs for x in zip(source_indices, matches_in_ref.__ID_REF)]
         for col in ['__ES_SCORE']: #, '__GAP', '__GAP_RATIO']:
             matches_in_ref.loc[sel, '__ES_SCORE'] = 0
@@ -408,7 +408,3 @@ def es_linker(es, source, params):
                             + special_cols]
     
     return new_source
-
-    
-
-        
