@@ -324,7 +324,16 @@ def gen_index_settings(default_analyzer, columns_to_index, analyzer_index_settin
             
         Ex: {'col1': {'analyzerA', 'analyzerB'}, 
              'col2': {}, 
-             'col3': 'analyzerB'}
+             'col3': {'analyzerB'}}
+        
+        HACK: 
+        Passing a string (instead of an iterable) as a value of this dict will 
+        change the behavior. The string that is passed will be used as the type
+        for the corresponding column (default elasticsearch behavior will apply)
+
+        Ex: {'col1': {'analyzerA', 'analyzerB'}, 
+             'numeric_column': 'float'}
+        
     analyzer_index_settings: dict or None
         Elasticsearch settings to define custom analyzers if any are used. 
         See Elasticsearch documentation on how to create custom analyzers.
@@ -341,6 +350,13 @@ def gen_index_settings(default_analyzer, columns_to_index, analyzer_index_settin
     else:
         index_settings = dict()
     
+    # Hack to be able to type columns as non-strings while preserving previous
+    # syntax for the library
+    columns_to_index_str = {key: val for key, val in columns_to_index.items()
+                            if not isinstance(val, str)}
+    columns_to_index_typed = {key: val for key, val in columns_to_index.items()
+                            if isinstance(val, str)}    
+    
     # Define mappings
     field_mappings = {
         key: {
@@ -354,7 +370,7 @@ def gen_index_settings(default_analyzer, columns_to_index, analyzer_index_settin
                 for analyzer in values
             }
         }
-        for key, values in columns_to_index.items() if values
+        for key, values in columns_to_index_str.items() if values
     }
                 
     field_mappings.update({
@@ -362,7 +378,16 @@ def gen_index_settings(default_analyzer, columns_to_index, analyzer_index_settin
             'analyzer': default_analyzer,
             'type': 'string'
         }
-        for key, values in columns_to_index.items() if not values
+        for key, values in columns_to_index_str.items() if not values
+    })
+                
+                
+    # Hack: add non-string typed columns
+    field_mappings.update({
+        key: {
+            'type': type_
+        }
+        for key, type_ in columns_to_index_typed.items()
     })
                 
     assert 'mappings' not in index_settings

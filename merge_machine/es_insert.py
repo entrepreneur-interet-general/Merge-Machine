@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import time
+from typing import Iterable
 
 from elasticsearch import Elasticsearch, client, RequestError
 import pandas as pd
@@ -73,7 +74,9 @@ def create_index(es, table_name, columns_to_index, default_analyzer='keyword',
     # Generate index settings template for custom analyzers that are used
     # in columns to_index or as default analyzer
     if analyzer_definitions is not None:
-        custom_analyzers = {y for x in columns_to_index.values() for y in x \
+        custom_analyzers = {y for x in columns_to_index.values() \
+                            if isinstance(x, Iterable) \
+                            for y in x \
                             if y in analyzer_definitions}
         if default_analyzer in analyzer_definitions:
             custom_analyzers.add(default_analyzer)
@@ -93,7 +96,9 @@ def create_index(es, table_name, columns_to_index, default_analyzer='keyword',
                 new_message = e.__str__() + '\n\n(MERGE MACHINE)--> This may be due to ' \
                                 'ES resource not being available. ' \
                                 'Run es_gen_resource.py (in sudo) for this to work'
-            raise Exception(new_message)
+                raise Exception(new_message)
+            else:
+                raise Exception(e.info)
 
 def update_analyzers(es, table_name, columns_to_index, default_analyzer='keyword', 
                  analyzer_index_settings=None, force=False):
