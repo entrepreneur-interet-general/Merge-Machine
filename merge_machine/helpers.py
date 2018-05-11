@@ -415,3 +415,7 @@ def _un_key_val_er(list_):
             return x
     return {_list_to_tuple(dict_['__KEY__']): dict_['__VAL__'] for dict_ in list_}
     
+
+def get_header(es, table_name):
+    '''Returns the keys of the first element of the table_name index.'''
+    return sorted(es.get(table_name, 'structure', 0)['_source'])

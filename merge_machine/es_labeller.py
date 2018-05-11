@@ -1046,9 +1046,6 @@ class BasicLabeller():
                          
                 for pair in query.history_pairs[self.current_source_idx]: 
                     
-                    print('current_source_idx:', self.current_source_idx)
-                    print('pair:', pair)
-                    
                     assert pair[0] == self.current_source_idx
 
                     # Check that source does not have match (or No match)
