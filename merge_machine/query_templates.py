@@ -33,8 +33,8 @@ class SingleQueryTemplate():
     def to_dict(self):
         '''Returns a dict representation of the class'''
         return {'bool_lvl': self.bool_lvl,
-                'source_col': self.source_col,
-                'ref_col': self.ref_col,
+                'source_col': list(self.source_col),
+                'ref_col': list(self.ref_col),
                 'analyzer_suffix': self.analyzer_suffix,
                 'boost': self.boost}
         
