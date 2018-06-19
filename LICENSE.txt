@@ -2,6 +2,8 @@ MIT License
 
 Copyright (c) 2017, Département des outils d'aide à la décision, Ministère de l'Enseignement Supérieur, de la Recherche et de l'Innovation (France)
 
+This software was developped by Léo Bouloc at the Département des outils d'aide à la décision, Ministère de l'Enseignement Supérieur, de la Recherche et de l'Innovation (France) in the context of the "Entrepreneur d'intérêt général" program, funded by the French Government.
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
