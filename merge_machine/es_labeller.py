@@ -2137,8 +2137,8 @@ class SearchLabeller(BasicLabeller):
     def add_custom_search(self, search_params, max_num_results=10):
         """Search for specific items in reference using Elasticsearch.
         
-        The items in `col_to_search` are searched for in the indexed defined by 
-        `ref_index_name` and results of the query are added in front of 
+        The items in `search_params` are searched for in the index defined by 
+        `self.ref_index_name` and results of the query are added in front of 
         `ref_gen` so as to be proposed as matches before returning to the matches
         proposed using `current_queries`.
         
