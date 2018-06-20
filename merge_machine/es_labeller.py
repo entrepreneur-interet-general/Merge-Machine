@@ -13,7 +13,7 @@ import random
 from elasticsearch import client, RequestError
 import numpy as np
 
-from .helpers import _gen_body, _bulk_search, _key_val_er, _un_key_val_er
+from .helpers import _bulk_search, _key_val_er, _pruned_bulk_search, _un_key_val_er
 from .my_json_encoder import MyEncoder
 from .query_templates import SingleQueryTemplate, CompoundQueryTemplate
 
@@ -955,11 +955,8 @@ class BasicLabeller():
     def _fetch_ref_item(self, ref_idx):
         """Fetch ref item from Elasticsearch database."""
         # TODO: look into batching this
-        try:
-            return self.es.get(self.ref_index_name, 'structure', ref_idx)['_source'] 
-        except:
-            import pdb; pdb.set_trace()
-    
+        return self.es.get(self.ref_index_name, 'structure', ref_idx)['_source'] 
+
     def _init_queries(self, match_cols, columns_to_index):
         """Generate initial query templates to be assigned to `current_queries`.
         """
@@ -1027,6 +1024,23 @@ class BasicLabeller():
             if not any(s_string == ref_item[col] for col in r_col):
                 return False
         return True
+
+    def _get_ref_item(self, ref_idx):
+        '''Get the reference item associated to the index by searching in 
+        memory first and then Elasticsearch.'''
+        # If the data associated to id is in memory
+        if ref_idx in self.ref_id_to_data:
+            item = self.ref_id_to_data[ref_idx]['_source'] # TODO: get item if it is not in ref_id_to_data
+            es_score = self.ref_id_to_data[ref_idx]['_score']
+        # If the data is not in memory, fetch by ID
+        else:
+            item = self._fetch_ref_item(ref_idx)
+            es_score = 1.23456789 
+        return item, es_score
+
+    def _get_source_item(self, source_idx):
+        '''Get the reference item associated to the index.'''
+        return self._fetch_source_item(source_idx)  
     
     def _init_ref_gen(self):
         """Initialize `ref_gen`.
@@ -1038,7 +1052,6 @@ class BasicLabeller():
         # Fetch data for current row
         self._fetch_results_for_row()
         
-        print('  >> IN INIT REF GEN')
         def temp():
             for i, query in enumerate(self.current_queries):
                 self.current_query_ranking = i
@@ -1052,14 +1065,8 @@ class BasicLabeller():
                     if pair[0] not in [x[0] for x in  self.labelled_pairs_match if x is not None]:
                         # Check that pair was not already labelled                        
                         if pair not in self.labelled_pairs:
-                            # If the data associated to id is in memory
-                            if pair[1] in self.ref_id_to_data:
-                                item = self.ref_id_to_data[pair[1]]['_source'] # TODO: get item if it is not in ref_id_to_data
-                                es_score = self.ref_id_to_data[pair[1]]['_score']
-                            # If the data is not in memory, fetch by ID
-                            else:
-                                item = self._fetch_ref_item(pair[1])
-                                es_score = 1.23456789
+                            
+                            item, es_score = self._get_ref_item(pair[1])
                             
                             # Yield only if probable enough
                             if query.thresh is not None:
@@ -1131,8 +1138,9 @@ class BasicLabeller():
         
     @print_name
     def pruned_bulk_search(self, queries_to_perform, row, num_results):
-        """ Performs a smart bulk request, optimized for a large number of 
-        queries to perform.
+        """ Performs a smart bulk request to search for a single row with 
+        with multiple analyzer combinations; optimized for a large number of 
+        queries.
         
         This function is a wrapper around bulk_search that organizes the search
         by branches based on common query cores. It will not search for templates
@@ -1146,59 +1154,12 @@ class BasicLabeller():
         num_results: int
             Maximum number of elements to return using the Elasticsearch query.
         """
-        
-        results = {}
-        core_has_results = dict()
-        
-        num_queries_performed = 0
-        
-        sorted_queries = sorted(queries_to_perform, key=lambda x: len(x.core)) # NB: groupby needs sorted 
-        for size, group in itertools.groupby(sorted_queries, key=lambda x: len(x.core)):
-            size_queries = sorted(group, key=lambda x: x.core)
-            
-            # 1) Fetch first of all unique cores            
-            query_bulk = []
-            for core, sub_group in itertools.groupby(size_queries, key=lambda x: x.core):
-                # Only add core if all parents can have results
-                core_queries = list(sub_group)
-                first_query = core_queries[0]
-                if all(core_has_results.get(parent_core, True) for parent_core in first_query.parent_cores):
-                    query_bulk.append(first_query)        
-                else:
-                    core_has_results[core] = False
-                    
-            # Perform actual queries
-            num_queries_performed += len(query_bulk)
-            bulk_results = self._bulk_search(query_bulk, row, num_results)
-            
-            # Store results
-            results.update(zip(query_bulk, bulk_results))
-            for query, res in zip(query_bulk, bulk_results):
-                core_has_results[query.core] = bool(res)
-                
-            # 2) Fetch queries when cores have results
-            query_bulk = []
-            for core, sub_group in itertools.groupby(size_queries, key=lambda x: x.core):
-                if core_has_results[core]:
-                    query_bulk.extend(list(sub_group))
- 
-            # Perform actual queries
-            num_queries_performed += len(query_bulk)
-            bulk_results = self._bulk_search(query_bulk, row, num_results)
-            
-            # Store results
-            results.update(zip(query_bulk, bulk_results))
-            
-        # Order responses
-        to_return = [results.get(query, []) for query in queries_to_perform]
-        
-        if not sum(bool(x) for x in to_return):
-            print('NO RESULTS !!')
-        
-        print('Num queries before pruning:', len(queries_to_perform))
-        print('Num queries performed:', num_queries_performed)
-        print('Non empty results:', sum(bool(x) for x in to_return))
-        return to_return
+        return _pruned_bulk_search(self.es, self.ref_index_name, 
+                                   queries_to_perform, 
+                                   row, 
+                                   self.must_filters, 
+                                   self.must_not_filters, 
+                                   num_results)
 
     def _compute_metrics(self):
         """Compute metrics for each individual query.
@@ -1511,29 +1472,37 @@ class BasicLabeller():
                                               self.current_ref_idx, user_input))
         
         # Interpret answers
-        yes = self.VALID_ANSWERS[user_input] == 'y'
-        no = self.VALID_ANSWERS[user_input] == 'n'
-        uncertain = self.VALID_ANSWERS[user_input] == 'u'
-        forget_row = self.VALID_ANSWERS[user_input] == 'f'
         use_previous = self.VALID_ANSWERS[user_input] == 'p'
-        assert yes + no + uncertain + forget_row + use_previous == 1            
-    
+                   
         if use_previous:
             self.previous()
             return
 
-        # The pair for which the user sent an answer
-        pair = (self.current_source_idx, self.current_ref_idx)
+        # Update with the pair for which the user sent an answer
+        self.update_pair(self.current_source_idx, 
+                         self.current_ref_idx, 
+                         user_input)
+        
+    def update_pair(self, source_idx, ref_idx, user_input):
+        '''Update the labeller for any source/ref pair.'''
+        
+        # Interpret answers
+        yes = self.VALID_ANSWERS[user_input] == 'y'
+        no = self.VALID_ANSWERS[user_input] == 'n'
+        uncertain = self.VALID_ANSWERS[user_input] == 'u'
+        forget_row = self.VALID_ANSWERS[user_input] == 'f'  
+        assert yes + no + uncertain + forget_row == 1 
+        
+        #
+        pair = (source_idx, ref_idx)
         
         assert pair not in self.labelled_pairs
         self.labelled_pairs.append(pair)
-        self.labels[pair] = user_input
-
-        print('in update')
+        self.labels[pair] = user_input        
         
         if yes:
             labelled_pair = pair
-            next_row = True
+            next_row = True # Skip to next row of source
         
         if no:
             next_row = False
@@ -1542,14 +1511,17 @@ class BasicLabeller():
             raise NotImplementedError('Uncertain is not yet implemented')
             
         if forget_row:
-            labelled_pair = (self.current_source_idx, '__FORGET')
+            labelled_pair = (source_idx, '__FORGET')
             next_row = True
             
         if not next_row:
             # Try to get next label, otherwise jump        
             try:
                 print('here')
-                (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
+                
+                # Change ref row if the ref being labelled is the current ref.
+                if ref_idx == self.current_ref_idx:
+                    (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
 
                 # If iterator runs out: next_row = True
                 self._update_row_count(False, yes)
@@ -1580,8 +1552,21 @@ class BasicLabeller():
             # TODO: look into batching this
             if yes:
                 for query in self.single_core_queries:
+                    
+                    #
+                    if source_idx != self.current_source_idx:
+                        source_item = self._get_source_item(source_idx)
+                    else:
+                        source_item = self.current_source_item
+
+                    #
+                    if ref_idx != self.current_ref_idx:
+                        ref_item, _ = self._get_ref_item(source_idx)
+                    else:
+                        ref_item = self.current_ref_item
+                    
                     query.add_labelled_pair_items(self.es, self.ref_index_name, 
-                                    self.current_source_item, self.current_ref_item)
+                                    source_item, ref_item)
 
                         
             # Filter queries
@@ -2134,20 +2119,13 @@ class SearchLabeller(BasicLabeller):
         print(sl.to_emit())
         return sl    
     
-    def add_custom_search(self, search_params, max_num_results=10):
+    def custom_search(self, search_params, max_num_results=10):
         """Search for specific items in reference using Elasticsearch.
         
         The items in `search_params` are searched for in the index defined by 
         `self.ref_index_name` and results of the query are added in front of 
         `ref_gen` so as to be proposed as matches before returning to the matches
         proposed using `current_queries`.
-        
-        This method allows the user to create custom searches on specific words 
-        (rather than searching for entire rows of `current_source_item`). This 
-        can be useful in two cases: 1) The user is using the labeller to label 
-        the entire file by hand; this can help find a match. 2) The labeller
-        is having trouble focusing at the beginning of the training; this can 
-        help speed up the process for the first few steps.
         
         Parameters
         ----------
@@ -2216,9 +2194,37 @@ class SearchLabeller(BasicLabeller):
         else:
             search_func = self.pruned_bulk_search
         res = search_func(query_templates, row, num_results=max_num_results) # TODO: add global filters ?
-        
+
         print('\nRow:\n', row)
         print('\nSearch params template:\n', search_params)
+        return res
+        
+    def add_custom_search(self, search_params, max_num_results=10):
+        """Search for specific items in reference using Elasticsearch and add 
+        to labelling queue.
+        
+        The items in `search_params` are searched for in the index defined by 
+        `self.ref_index_name` and results of the query are added in front of 
+        `ref_gen` so as to be proposed as matches before returning to the matches
+        proposed using `current_queries`.
+        
+        This method allows the user to create custom searches on specific words 
+        (rather than searching for entire rows of `current_source_item`). This 
+        can be useful in two cases: 1) The user is using the labeller to label 
+        the entire file by hand; this can help find a match. 2) The labeller
+        is having trouble focusing at the beginning of the training; this can 
+        help speed up the process for the first few steps.
+        
+        Parameters
+        ----------
+        search_params: dict 
+            The values to search for in each columns of the referential.
+            Ex: {col1: [val1, val2], col4: [val3]}
+        max_num_results: int
+            The maximum number of results to append for a search.
+        """
+        
+        res = self.custom_search(search_params, max_num_results=10)
         
         # Remove previous results of search
         self.clear_custom_search()

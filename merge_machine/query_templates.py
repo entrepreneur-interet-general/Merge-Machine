@@ -87,7 +87,13 @@ class SingleQueryTemplate():
 
 class CompoundQueryTemplate():
     '''Information regarding a query to be used in the labeller'''
-    def __init__(self, single_query_templates_tuple):        
+    def __init__(self, single_query_templates_tuple):    
+        '''
+        Parameters
+        ----------
+        single_query_templates_tuple: list of tuples
+            Each tuple is used to initiate an instance of SingleQueryTemplate
+        '''
         self.musts = tuple(sorted([SingleQueryTemplate(*x) for x in single_query_templates_tuple if x[0] == 'must']))
         self.shoulds = tuple(sorted([SingleQueryTemplate(*x) for x in single_query_templates_tuple if x[0] == 'should']))
         

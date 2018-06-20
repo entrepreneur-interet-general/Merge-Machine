@@ -274,6 +274,94 @@ def _bulk_search(es, index_name, all_query_templates, rows, must_filters, must_n
     return og_search_templates, full_responses
 
 
+def _pruned_bulk_search(es, index_name, queries_to_perform, row, must_filters, must_not_filters, num_results):
+    """ Performs a smart bulk request, optimized for a large number of 
+    queries to perform.
+    
+    This function is a wrapper around bulk_search that organizes the search
+    by branches based on common query cores. It will not search for templates
+    if restrictions of these templates already did not return any results.
+
+    Parameters
+    ----------
+    es: instance of `Elasticsearch`
+        Connection to Elasticsearch.
+    index_name: str
+        Name of the index in Elasticsearch.
+    queries_to_perform: list of instances of `CompoundQueryTemplate`
+    row: `pandas.Series` or `dict` like {column: value, ...}
+        Elements to search for in query.
+    must_filters: `dict` shaped as {column: list_of_words, ...}
+        Terms to filter by field (AND: will include ONLY IF ALL are in text).
+    must_not_filters: `dict` shaped as {column: list_of_words, ...}
+        Terms to exclude by field from search (OR: will exclude if ANY is found
+    num_results: int
+        Maximum number of elements to return using the Elasticsearch query.
+    """
+    
+    results = {}
+    core_has_results = dict()
+    
+    num_queries_performed = 0
+    
+    sorted_queries = sorted(queries_to_perform, key=lambda x: len(x.core)) # NB: groupby needs sorted 
+    for size, group in itertools.groupby(sorted_queries, key=lambda x: len(x.core)):
+        size_queries = sorted(group, key=lambda x: x.core)
+        
+        # 1) Fetch first of all unique cores            
+        query_bulk = []
+        for core, sub_group in itertools.groupby(size_queries, key=lambda x: x.core):
+            # Only add core if all parents can have results
+            core_queries = list(sub_group)
+            first_query = core_queries[0]
+            if all(core_has_results.get(parent_core, True) for parent_core in first_query.parent_cores):
+                query_bulk.append(first_query)        
+            else:
+                core_has_results[core] = False
+                
+        # Perform actual queries
+        num_queries_performed += len(query_bulk)
+        query_bulk_tuple = [x._as_tuple() for x in query_bulk]
+        search_templates, full_responses = _bulk_search(es, index_name, 
+                                                        query_bulk_tuple, [row], 
+                                                        must_filters, must_not_filters, num_results)
+        bulk_results = [full_responses[i]['hits']['hits'] for (i, _) in search_templates]
+
+        
+        # Store results
+        results.update(zip(query_bulk, bulk_results))
+        for query, res in zip(query_bulk, bulk_results):
+            core_has_results[query.core] = bool(res)
+            
+        # 2) Fetch queries when cores have results
+        query_bulk = []
+        for core, sub_group in itertools.groupby(size_queries, key=lambda x: x.core):
+            if core_has_results[core]:
+                query_bulk.extend(list(sub_group))
+ 
+        # Perform actual queries
+        num_queries_performed += len(query_bulk)
+        query_bulk_tuple = [x._as_tuple() for x in query_bulk]
+        search_templates, full_responses = _bulk_search(es, index_name, 
+                                                        query_bulk_tuple, [row], 
+                                                        must_filters, must_not_filters, num_results)
+        bulk_results = [full_responses[i]['hits']['hits'] for (i, _) in search_templates]
+        
+        # Store results
+        results.update(zip(query_bulk, bulk_results))
+        
+    # Order responses
+    to_return = [results.get(query, []) for query in queries_to_perform]
+    
+    if not sum(bool(x) for x in to_return):
+        print('NO RESULTS !!')
+    
+    print('Num queries before pruning:', len(queries_to_perform))
+    print('Num queries performed:', num_queries_performed)
+    print('Non empty results:', sum(bool(x) for x in to_return))
+    return to_return
+
+
 def _gen_index_settings_from_analyzers(analyzers):
     '''Takes our custom analyzer definitions and turns them into appropriate
     input for Elasticsearch settings for index creation.
