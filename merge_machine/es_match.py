@@ -411,5 +411,7 @@ def es_linker(es, source, params):
     # Re-create original file if necessary
     if duplicate_indices is not None:
         return _re_duplicate(source, new_source, duplicate_indices)
+    else:
+        new_source['__SOURCE_GROUP'] = None
     
     return new_source
