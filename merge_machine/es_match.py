@@ -306,7 +306,7 @@ def es_linker(es, source, params):
     if duplicate_indices is None:
         print('No duplicates found')
         small_source = source
-        del source
+        # del source
     
     exact_source_indices = [x[0] for x in exact_pairs if x[1] is not None if x[0] in small_source.index]
     exact_ref_indices = [x[1] for x in exact_pairs if x[1] is not None if x[0] in small_source.index]
