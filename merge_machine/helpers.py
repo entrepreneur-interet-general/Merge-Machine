@@ -105,7 +105,7 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
     # CUTOFF_FREQ = 0.001
     
     query_template = [_reformat_s_q_t(s_q_t) for s_q_t in query_template]
-
+    
     body = {
           'size': num_results,
           'query': {

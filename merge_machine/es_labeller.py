@@ -779,6 +779,8 @@ class BasicLabeller():
             self._next_row()
 
         self._sanity_check()
+        
+        print(self.source)
 
     def _sanity_check(self):
         """Make sure you are not crazy. Run this after updates in dev."""
@@ -950,6 +952,8 @@ class BasicLabeller():
     
     def _fetch_source_item(self, source_idx):
         """Fetch source item from pandas table in memory."""
+        print('yaga', self.source)
+        print('yago', self.source.loc[source_idx, :])
         return self.source.loc[source_idx, :]
     
     def _fetch_ref_item(self, ref_idx):
@@ -1042,12 +1046,56 @@ class BasicLabeller():
         '''Get the reference item associated to the index.'''
         return self._fetch_source_item(source_idx)  
     
+    def _ref_rows_for_current_source_row(self, max_num_items, max_num_queries):
+        ''' /!\ This function overlaps with _init_ref_gen and could be used in a 
+        future simpler version of the project in combination with label_pair
+        '''
+        MIN_ES_SCORE_TO_TRESH = 2
+        MAX_NUM_PROPOSALS_PER_QUERY = 4
+
+        # Fetch data for current row
+        self._fetch_results_for_row()
+        
+        ref_rows = []
+        try:
+            for i, query in enumerate(self.current_queries[:max_num_queries]):
+    #            self.current_query_ranking = i
+    #            self.current_query = query # TODO: for display only
+                ref_rows_query = []
+                for pair in query.history_pairs[self.current_source_idx][:MAX_NUM_PROPOSALS_PER_QUERY]: 
+                    
+                    assert pair[0] == self.current_source_idx
+    
+                    # Check that source does not have match (or No match)
+                    # Check that pair was not already labelled          
+                    if pair[1] not in [item['_id'] for items in ref_rows for item in items]:
+                    
+                        item, es_score = self._get_ref_item(pair[1])
+                        
+                        # Yield only if probable enough
+                        if query.thresh is not None:
+                            if es_score >= (query.thresh / MIN_ES_SCORE_TO_TRESH):
+                                ref_rows_query.append({'_id': pair[1], '_source': item, '_score': es_score})
+                        else:
+                            ref_rows_query.append({'_id': pair[1], '_source': item, '_score': es_score})
+                        if len(ref_rows_query) >= max_num_items:
+                            raise StopIteration
+                ref_rows.append(ref_rows_query)
+        except StopIteration:
+            pass
+            
+        return ref_rows
+                                
+                                
     def _init_ref_gen(self):
         """Initialize `ref_gen`.
         
         Initialize a generator of pairs to label for the source element 
         currently being labelled (`current_source_idx`).
         """
+        
+        MIN_ES_SCORE_TO_TRESH = 2
+        MAX_NUM_PROPOSALS_PER_QUERY = 4
 
         # Fetch data for current row
         self._fetch_results_for_row()
@@ -1057,12 +1105,12 @@ class BasicLabeller():
                 self.current_query_ranking = i
                 self.current_query = query # TODO: for display only
                          
-                for pair in query.history_pairs[self.current_source_idx]: 
+                for pair in query.history_pairs[self.current_source_idx][:MAX_NUM_PROPOSALS_PER_QUERY]: 
                     
                     assert pair[0] == self.current_source_idx
 
                     # Check that source does not have match (or No match)
-                    if pair[0] not in [x[0] for x in  self.labelled_pairs_match if x is not None]:
+                    if pair[0] not in [x[0] for x in self.labelled_pairs_match if x is not None]:
                         # Check that pair was not already labelled                        
                         if pair not in self.labelled_pairs:
                             
@@ -1070,7 +1118,7 @@ class BasicLabeller():
                             
                             # Yield only if probable enough
                             if query.thresh is not None:
-                                if es_score >= (query.thresh / 2):
+                                if es_score >= (query.thresh / MIN_ES_SCORE_TO_TRESH):
                                     yield pair[1], item, es_score
                             else:
                                 yield pair[1], item, es_score
@@ -1486,6 +1534,13 @@ class BasicLabeller():
     def update_pair(self, source_idx, ref_idx, user_input):
         '''Update the labeller for any source/ref pair.'''
         
+        print('AZERAZER')
+        print(self.current_source_idx)        
+        print(source_idx, ref_idx, user_input)
+        if self.current_source_idx != source_idx:
+            raise NotImplementedError('Update pair not implemented when update' \
+                                      ' concerns a source that is not current')
+        
         # Interpret answers
         yes = self.VALID_ANSWERS[user_input] == 'y'
         no = self.VALID_ANSWERS[user_input] == 'n'
@@ -1511,8 +1566,8 @@ class BasicLabeller():
             raise NotImplementedError('Uncertain is not yet implemented')
             
         if forget_row:
-            labelled_pair = (source_idx, '__FORGET')
-            next_row = True
+            labelled_pair = (source_idx, '__NO_RESULT') # OG was __FORGET
+            next_row = True # OG was True
             
         if not next_row:
             # Try to get next label, otherwise jump        
@@ -2016,6 +2071,9 @@ class BasicLabeller():
         self._sorta_sort_queries()
         self._sort_queries()
     
+#    def next_items(self, max_num_items):
+        
+    
     def to_emit(self):
         """Creates a dict to be sent to the template."""#TODO: fix this
         dict_to_emit = dict()
@@ -2069,6 +2127,7 @@ class BasicLabeller():
         dict_to_emit['ref_item'] = {'_id': self.current_ref_idx, 
                                     '_score': self.current_es_score,
                                     '_source': self.current_ref_item}
+        dict_to_emit['top_ref_items'] = self._ref_rows_for_current_source_row(20, 10**9)
         
         dict_to_emit['es_score'] = self.current_es_score
         dict_to_emit['majority_vote'] = self.majority_vote(10)
