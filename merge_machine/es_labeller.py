@@ -952,8 +952,6 @@ class BasicLabeller():
     
     def _fetch_source_item(self, source_idx):
         """Fetch source item from pandas table in memory."""
-        print('yaga', self.source)
-        print('yago', self.source.loc[source_idx, :])
         return self.source.loc[source_idx, :]
     
     def _fetch_ref_item(self, ref_idx):
@@ -979,7 +977,6 @@ class BasicLabeller():
                                                     columns_to_index, 
                                                     {}, # defaults to must
                                                     [1])
-        print('Warning: initializing core scorer query templates')
         self.single_core_queries = [CoreScorerQueryTemplate(*q_t_t) for q_t_t \
                                     in all_single_query_templates_tuples]
 
@@ -1284,7 +1281,7 @@ class BasicLabeller():
         This removes the last label and puts "current" attributes to their 
         previous version. It removes the labels from current_queries but metrics
         are NOT re-computed. Also, addition of must_filters, must_not_filters 
-        and any changes to current_queries (expansion or filtering) will not 
+        and any changes to current_queries (expansion or filtering) will NOT 
         be undone.    
         """
         # Re-place current values in todo-stack
@@ -2600,7 +2597,7 @@ class ConsoleLabeller(Labeller):
         return False 
     
     def update_filter(self, user_input):
-        """Change values for labeller filters."""
+        """Change values for labeller permanent filters."""
         
         values = [x.strip() for x in user_input.split('/', 2)]
         
