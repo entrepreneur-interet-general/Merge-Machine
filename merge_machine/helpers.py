@@ -101,7 +101,7 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
     # boost = s_q_t[4]
     #==========================================================================
     
-    DEFAULT_FILTER_FIELD = '.french' # TODO: replace by standard or whitespace
+    DEFAULT_FILTER_FIELD = '.french_estab' # TODO: replace by standard or whitespace
     # CUTOFF_FREQ = 0.001
     
     query_template = [_reformat_s_q_t(s_q_t) for s_q_t in query_template]
@@ -139,14 +139,13 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
                 for must_or_should in ['must', 'should']
                 },
                     **{
-                       'must_not': [{'match_phrase': {field + DEFAULT_FILTER_FIELD: {'query': value}}
-                                 } for field, values in must_not_filters.items() for value in values],
+                       'must_not': [{'match': {field + DEFAULT_FILTER_FIELD: {'query': ' '.join(values), 'operator': 'or'}}
+                                 } for field, values in must_not_filters.items() if values],
                        'filter': [{'match_phrase': {field + DEFAULT_FILTER_FIELD: {'query': value}}
                                  } for field, values in must_filters.items() for value in values],
                     })               
                   }
            }
-
     return body
 
 
