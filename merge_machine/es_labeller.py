@@ -780,7 +780,6 @@ class BasicLabeller():
 
         self._sanity_check()
         
-        print(self.source)
 
     def _sanity_check(self):
         """Make sure you are not crazy. Run this after updates in dev."""
@@ -925,7 +924,6 @@ class BasicLabeller():
                 w.write(encoder.encode(dict_))
         except:
             for key in dict_.keys():
-                print('trying key:', key)
                 with open(file_path, 'w') as w:
                     w.write(encoder.encode(dict_[key]))         
 
@@ -1144,7 +1142,7 @@ class BasicLabeller():
                     break
                 except StopIteration:
                     print(self.current_source_item)
-                    print('WARNING: no results found for this row; skipping')
+                    print('WARNING: no results found for the row above; skipping')
                     self._update_row_count(True, False) # TODO: not tested! 
         else:
             self.status = 'NO_MATCHES'
@@ -1530,10 +1528,6 @@ class BasicLabeller():
         
     def update_pair(self, source_idx, ref_idx, user_input):
         '''Update the labeller for any source/ref pair.'''
-        
-        print('AZERAZER')
-        print(self.current_source_idx)        
-        print(source_idx, ref_idx, user_input)
         if self.current_source_idx != source_idx:
             raise NotImplementedError('Update pair not implemented when update' \
                                       ' concerns a source that is not current')
@@ -1550,7 +1544,7 @@ class BasicLabeller():
         
         assert pair not in self.labelled_pairs
         self.labelled_pairs.append(pair)
-        self.labels[pair] = user_input        
+        self.labels[pair] = self.VALID_ANSWERS[user_input]      
         
         if yes:
             labelled_pair = pair
@@ -1569,8 +1563,6 @@ class BasicLabeller():
         if not next_row:
             # Try to get next label, otherwise jump        
             try:
-                print('here')
-                
                 # Change ref row if the ref being labelled is the current ref.
                 if ref_idx == self.current_ref_idx:
                     (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
@@ -1667,7 +1659,6 @@ class BasicLabeller():
             self.status = 'NO_ITEMS_TO_LABEL'
             logging.warning('Cannot re-score history: NO_ITEMS_TO_LABEL')
             return
-            
             
         print('WARNING: re-scoring history')
         # Re-initialize queries
@@ -1945,9 +1936,6 @@ class BasicLabeller():
         indices_to_keep = [i for i, x in enumerate(self.current_queries) \
                                if x.precision >= _min_precision(self)]
         indices_to_keep += sorted_indices[len(indices_to_keep): self.MIN_NUM_QUERIES]
-        print(len(sorted_indices))
-        print(_min_precision(self))
-        print(indices_to_keep)
         
         # Complex maneuver to avoid copying self.current_queries #TODO: change this ?
         self.current_queries = [x for i, x in enumerate(self.current_queries) \
@@ -2034,9 +2022,9 @@ class BasicLabeller():
         params['must'] = self.must_filters
         params['must_not'] = self.must_not_filters
         
-        params['exact_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'yes']
-        params['non_matching_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'no']
-        params['forgotten_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'forget_row']
+        params['exact_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'y']
+        params['non_matching_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'n']
+        params['forgotten_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'f']
         
         return params
     
@@ -2169,10 +2157,6 @@ class SearchLabeller(BasicLabeller):
         if res: 
             assert sl.current_query_ranking == -1
             sl._add_searches(res, replace_current=False)
-        
-        print('query ranking', sl.current_query_ranking)
-        
-        print(sl.to_emit())
         return sl    
     
     def custom_search(self, search_params, max_num_results=10):
@@ -2370,10 +2354,10 @@ class SearchLabeller(BasicLabeller):
                 (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
             except StopIteration:
                 print(self.current_source_item)
-                print('WARNING: no results found for this row; skipping')
+                print('WARNING: no results found for the row above; skipping')
                 self._update_row_count(True, False) # TODO: not tested! 
                 self._next_row()
-            
+                
             
 class Labeller(SearchLabeller):
     '''Keep this for compatibility.'''
