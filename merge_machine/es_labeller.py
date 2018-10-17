@@ -272,7 +272,7 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
         # TODO: Check whether or not to re-compute scores 
 
 
-    def compute_metrics(self, t_p=0.95, t_r=0.3):
+    def compute_metrics(self, t_p=0.95, t_r=0.3, source_indices=None):
         """ 
         Compute the optimal threshold and the associated metrics 
         
@@ -282,6 +282,9 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
             target_precision
         t_r: float between 0 and 1
             target_recall
+        source_indices: list of indices or None
+            The indices of the source on which to restrict the computation of
+            the metrics. None indicates no restriction
             
         Returns
         -------
@@ -302,11 +305,15 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
         score: float between 0 an 1
             The optimal score (that yields the optimal threshold).
         """
+        if source_indices is None:
+            source_indices = list(self.any_is_match.keys())
+        
         summaries = [{'score': self.first_scores[source_idx], 
                       'has_results': self.has_results[source_idx],
                       'first_is_match': self.first_is_match[source_idx], 
                       'any_is_match': self.any_is_match[source_idx]} \
-                      for source_idx in self.any_is_match.keys()]
+                      for source_idx in self.any_is_match.keys() \
+                      if source_idx in source_indices]
         
         # Filter out relevent summaries only (line not forgotten)
         summaries = [summary for summary in summaries if summary['first_is_match'] is not None]
@@ -333,9 +340,7 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
         rolling_precision = is_first_vect.cumsum() / (np.arange(num_summaries) + 1)
         rolling_recall = is_first_vect.cumsum() / num_summaries
         
-        # TODO: WHY is recall same as precision ?
-        
-        # Compute score
+        # Compute custom score
         _f_precision = lambda x: max(x - t_p, 0) + min(t_p*(x/t_p)**3, t_p)
         _f_recall = lambda x: max(x - t_r, 0) + min(t_p*(x/t_r)**3, t_r)
         a = np.fromiter((_f_precision(xi) for xi in rolling_precision), rolling_precision.dtype)
@@ -670,6 +675,7 @@ class BasicLabeller():
     
     MAX_NUM_LEVELS = 3 # Number of match clauses
     MIN_NUM_QUERIES = 3 # Minimum number of queries to try out
+    MAX_NUM_QUERIES_FOR_LINKING = 6 # Number of queries for export
     BOOL_LEVELS = {'.integers': ['must', 'should'], # Analyzers with "should"
                    '.city': ['must', 'should']}
     BOOST_LEVELS = [1]
@@ -772,7 +778,12 @@ class BasicLabeller():
         self.current_ref_item = None
         
         self.current_es_score = None
-
+        
+        #
+        self.estimated_precision = 0
+        self.estimated_recall = 0
+        self.num_queries_sorted = 1 # Number of queries sorted by _iterative_metrics_and_sort
+        
         self.status = 'ACTIVE' # 'ACTIVE', 'NO_ITEMS_TO_LABEL', 'NO_QUERIES', 'NO_MATCHES'
 
         if next_row:
@@ -843,6 +854,10 @@ class BasicLabeller():
         dict_['current_ref_item'] = self.current_ref_item
         dict_['current_es_score'] = self.current_es_score
         
+        dict_['estimated_precision'] = self.estimated_precision
+        dict_['estimated_recall'] = self.estimated_recall
+        dict_['num_queries_sorted'] = self.num_queries_sorted
+        
         dict_['ref_id_to_data'] = self.ref_id_to_data
         
         dict_['status'] = self.status
@@ -900,6 +915,10 @@ class BasicLabeller():
         labeller.current_ref_item = dict_['current_ref_item']
         
         labeller.current_es_score = dict_['current_es_score']
+        
+        labeller.estimated_precision = dict_['estimated_precision']
+        labeller.estimated_recall = dict_['estimated_recall']
+        labeller.num_queries_sorted = dict_['num_queries_sorted']
 
         labeller.ref_id_to_data = dict_['ref_id_to_data']
 
@@ -1204,11 +1223,70 @@ class BasicLabeller():
                                    self.must_not_filters, 
                                    num_results)
 
-    def _compute_metrics(self):
+    def _compute_metrics(self, source_indices=None):
         """Compute metrics for each individual query.
+        
+        Parameters
+        ----------
+        source_indices: list of indices or None
+            The indices of the source on which to restrict the computation of
+            the metrics. None indicates no restriction.
         """
         for query in self.current_queries:
-            query.compute_metrics(self.TARGET_PRECISION, self.TARGET_RECALL)
+            query.compute_metrics(self.TARGET_PRECISION, self.TARGET_RECALL, 
+                                  source_indices)
+    
+    def _iterative_metrics_and_sort(self):
+        """Iteratavely sort queries, recomputing scores based on the remaining
+        non-matched examples.
+        
+        # TODO: try multiple orderes if there are equal scores
+        """
+        # Max number of queries to cover (at least one)
+        max_iterations = min(max(self._nprl() // 2, 1), self.MAX_NUM_QUERIES_FOR_LINKING) 
+        
+        sources_unmatched = set(self.current_queries[0].first_scores.keys())
+        sources_matched = set()
+        num_valid_matches = 0
+        ordered_queries = []
+        
+        for i in range(0, min(max_iterations, len(self.current_queries))):
+            if not sources_unmatched:
+                break
+            if (len(sources_unmatched) <= 3) and i > 0:
+                break
+            self._compute_metrics(source_indices=sources_unmatched)
+            
+            # Get best query with the subset of sources being considered
+            query = self.current_queries[np.argmax([q.score for q in self.current_queries])]
+            ordered_queries.append(query)
+            
+            # Evaluate each un-matched source with the current query being considered
+            for source_id, score in query.first_scores.items():
+                if source_id in sources_unmatched:
+                    if score >= query.thresh:
+                        sources_matched.add(source_id)
+                        sources_unmatched.remove(source_id)
+                        num_valid_matches += int(query.first_is_match[source_id])
+            
+            # TODO: evaluate contextualized precision and recall
+        
+        if sources_matched:
+            self.estimated_precision =  num_valid_matches / len(sources_matched)
+            self.estimated_recall = num_valid_matches / (len(sources_matched) + len(sources_unmatched))
+        else:
+            self.estimated_precision = 0
+            self.estimated_recall = 0
+        
+        print('Iterative sorting led to {} sorted'.format(len(ordered_queries)))
+        # List all ordered queries
+        for query in self.current_queries:
+            if query not in ordered_queries:
+                ordered_queries.append(query)
+        self.current_queries = ordered_queries
+        self.num_queries_sorted = i + 1
+            
+        
     
     def majority_vote(self, max_num_voters, min_score=0):
         """ #TODO: Document """
@@ -1242,7 +1320,7 @@ class BasicLabeller():
             Attribute to use to sort queries
         """
         self.current_queries = sorted(self.current_queries, 
-                                      key=lambda x: x.__dict__[by], reverse=True)
+                                      key=lambda x: getattr(x, by), reverse=True)
                 
     def _sorta_sort_queries(self):
         """Alternate between random queries and sorted by best Elasticsearch score.
@@ -1586,11 +1664,9 @@ class BasicLabeller():
             # Update metrics
             if labelled_pair[1] != '__FORGET':
                 if self.num_positive_rows_labelled[-1]:                
-                    if True: # TODO: use sort_queries
-                        self._compute_metrics()
+                    if True: 
                         self._sorta_sort_queries()
-                        self._sort_queries()
-            
+                        self._iterative_metrics_and_sort()
             
             # Update core queries
             # TODO: look into batching this
@@ -1707,11 +1783,9 @@ class BasicLabeller():
 
             if learn:
                 # Re-score metrics
-                self._compute_metrics()
-                
                 # if True: # TODO: use sort_queries
                 self._sorta_sort_queries()
-                self._sort_queries()                 
+                self._iterative_metrics_and_sort()
                 
                 # Filter queries
                 self.filter_()
@@ -1722,11 +1796,10 @@ class BasicLabeller():
                 # Get new pair
                 self._next_row()
 
-        # Re-score metrics
-        self._compute_metrics()
         # if True: # TODO: use sort_queries
         self._sorta_sort_queries()
-        self._sort_queries()
+        # Re-score metrics
+        self._iterative_metrics_and_sort()
 
         # Go back to original state
         self.current_source_idx = current_source_idx
@@ -1773,7 +1846,8 @@ class BasicLabeller():
         """
     
         def wrapper(self, *args, **kwargs):
-            self._sort_queries()
+            #self._sort_queries()
+            self._iterative_metrics_and_sort()
             log = dict()
             log['func_name'] = func.__name__
             if self.current_queries:
@@ -1790,7 +1864,8 @@ class BasicLabeller():
             
             res = func(self, *args, **kwargs)
 
-            self._sort_queries()
+            # self._sort_queries()
+            self._iterative_metrics_and_sort()
             if self.current_queries:    
                 best_query = self.current_queries[0]
                 log['best_query'] = best_query
@@ -1827,7 +1902,7 @@ class BasicLabeller():
             
         self.current_queries = [sorted(queries, key=lambda x: x.score)[-1] \
                                 for queries in queries_by_extended_core.values()]
-        self._sort_queries()
+        self._iterative_metrics_and_sort()
         
     def filter_(self):
         """Apply filtering on current_queries."""
@@ -2010,7 +2085,7 @@ class BasicLabeller():
                               'best_thresh': q.thresh if q.thresh else 0,
                               'expected_precision': q.precision,
                               'expected_recall': q.recall} \
-                                  for q in self.current_queries]
+                                  for q in self.current_queries[:self.num_queries_sorted]]
         
         # Sort queries by precision if possible
         assert all(x['expected_precision'] is None for x in params['queries']) \
@@ -2052,9 +2127,8 @@ class BasicLabeller():
         self.TARGET_RECALL = t_r
 
         # Re-score metrics
-        self._compute_metrics()
         self._sorta_sort_queries()
-        self._sort_queries()
+        self._iterative_metrics_and_sort()
     
 #    def next_items(self, max_num_items):
         
@@ -2083,19 +2157,21 @@ class BasicLabeller():
         # TODO: on  previous, current_query is no longer valid
         dict_to_emit['query_ranking'] = self.current_query_ranking
         if self.current_query_ranking != -1:
-            best_query = self.current_queries[0]
-            dict_to_emit['query'] = best_query._as_tuple()
-            dict_to_emit['estimated_precision'] = best_query.precision # TODO: 
-            dict_to_emit['estimated_recall'] = best_query.recall # TODO: 
-            dict_to_emit['estimated_score'] = best_query.score # TODO:   
-            dict_to_emit['thresh'] = best_query.thresh        
+            # best_query = self.current_queries[0]
+            # dict_to_emit['query'] = best_query._as_tuple()
+            #dict_to_emit['estimated_score'] = best_query.score
+            # dict_to_emit['thresh'] = best_query.thresh        
 
             current_query = self.current_query
             dict_to_emit['c_query'] = current_query._as_tuple()
-            dict_to_emit['c_estimated_precision'] = current_query.precision # TODO: 
-            dict_to_emit['c_estimated_recall'] = current_query.recall # TODO: 
-            dict_to_emit['c_estimated_score'] = current_query.score # TODO:   
+            dict_to_emit['c_estimated_precision'] = current_query.precision
+            dict_to_emit['c_estimated_recall'] = current_query.recall
+            dict_to_emit['c_estimated_score'] = current_query.score 
             dict_to_emit['c_thresh'] = current_query.thresh   
+
+        dict_to_emit['estimated_precision'] = self.estimated_precision
+        dict_to_emit['estimated_recall'] = self.estimated_recall 
+        dict_to_emit['num_queries_sorted'] = self.num_queries_sorted
 
         # Info on pair
         dict_to_emit['source_idx'] = self.current_source_idx
@@ -2525,7 +2601,7 @@ class ConsoleLabeller(Labeller):
                                               dict_to_emit['c_estimated_score']))
         
             print('Result ES score: {0}; Query thresh: {1}; Is match: {2}'.format(dict_to_emit['es_score'],
-                      dict_to_emit['thresh'], dict_to_emit['estimated_is_match']))
+                      dict_to_emit['c_thresh'], dict_to_emit['estimated_is_match']))
             # print('Majority_vote:', dict_to_emit['majority_vote'])
     
         print('\n(S): {0}'.format(dict_to_emit['source_idx']))
