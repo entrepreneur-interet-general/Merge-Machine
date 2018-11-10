@@ -149,6 +149,7 @@ city = {
                         "type" : "synonym", 
                         "expand": False,    
                         "ignore_case": True,
+                        "lenient": True, # For compatibility with ES 6.X
                         # "synonyms" : ["paris, lutece => paname"],
                         "synonyms_path" : city_syn_file_path,
                         "tokenizer" : "city_standard"  # TODO: whitespace? 
@@ -212,6 +213,7 @@ country = {
                         "type" : "synonym", 
                         "expand": False,    
                         "ignore_case": True,
+                        "lenient": True,
                         "synonyms_path" : country_syn_file_path#,
                         #"tokenizer" : "standard"  # TODO: whitespace? 
                     },
