@@ -9,6 +9,7 @@ import itertools
 import json
 import logging
 import random
+import time
 
 from elasticsearch import client, RequestError
 import numpy as np
@@ -22,6 +23,7 @@ from .query_templates import SingleQueryTemplate, CompoundQueryTemplate
 # =============================================================================
 
 INDENT_LVL = 0
+TIME_IN = defaultdict(float)
 
 def print_name(function):
     """Print the function being run with indentation for inclusion.
@@ -34,11 +36,27 @@ def print_name(function):
         ind = 2 * INDENT_LVL * ' '
         INDENT_LVL += 1
         print('{0}<< Starting: {1} ({2})'.format(ind, function.__name__, my_id))
+        start_time = time.time()
         res = function(*args, **kwargs)
         INDENT_LVL -= 1
-        print('{0}>> Ending: {1} ({2})'.format(ind, function.__name__, my_id))
+        print('{0}>> Ending: {1} ({2}) / Took {3}s'.format(ind, \
+                      function.__name__, my_id, time.time()-start_time))
         return res
     return wrapper
+
+def time_in(function):
+    def wrapper(*args, **kwargs):
+        global TIME_IN
+        start_time = time.time()
+        res = function(*args, **kwargs)
+        TIME_IN[function.__name__] += time.time()-start_time
+        return res
+    return wrapper
+
+def _print_time_in():
+    global TIME_IN
+    for key, value in TIME_IN.items():
+        print('{}: {}s'.format(key, value))
 
 # =============================================================================
 # Helper functions (for use in Labeller)
@@ -572,7 +590,7 @@ class CoreScorerQueryTemplate(SingleQueryTemplate):
         ref_inter_lens = [x for x, y in zip(self.ref_lens, self.is_match) if y]
         inter_lens = [x for x, y in zip(self.intersect_lens, self.is_match) if y]
         self.yes_or_none_score = sum((i>0) or (s==0) or (r==0)  \
-                 for (i, s, r) in zip(source_inter_lens, ref_inter_lens, inter_lens)) \
+                 for (i, s, r) in zip(inter_lens, source_inter_lens, ref_inter_lens)) \
                  / len(inter_lens)
         
         # NB: no need to use yes or None if already using the core as must
@@ -1042,7 +1060,8 @@ class BasicLabeller():
             if not any(s_string == ref_item[col] for col in r_col):
                 return False
         return True
-
+    
+    @time_in
     def _get_ref_item(self, ref_idx):
         '''Get the reference item associated to the index by searching in 
         memory first and then Elasticsearch.'''
@@ -1060,6 +1079,7 @@ class BasicLabeller():
         '''Get the reference item associated to the index.'''
         return self._fetch_source_item(source_idx)  
     
+    @time_in
     def _ref_rows_for_current_source_row(self, max_num_items, max_num_queries):
         ''' /!\ This function overlaps with _init_ref_gen and could be used in a 
         future simpler version of the project in combination with label_pair
@@ -1167,6 +1187,7 @@ class BasicLabeller():
             self.status = 'NO_MATCHES'
             logging.warning('Could not find any resut in {0} consecutive rows'.format(NUM_ROW_TRIES))
 
+    @time_in
     def _bulk_search(self, queries_to_perform, row, num_results):
         """Perform bulk searches using Elasticsearch (wrapper around 
         helpers._bulk_search
@@ -1223,6 +1244,7 @@ class BasicLabeller():
                                    self.must_not_filters, 
                                    num_results)
 
+    @time_in
     def _compute_metrics(self, source_indices=None):
         """Compute metrics for each individual query.
         
@@ -1236,20 +1258,28 @@ class BasicLabeller():
             query.compute_metrics(self.TARGET_PRECISION, self.TARGET_RECALL, 
                                   source_indices)
     
+    @time_in
     def _iterative_metrics_and_sort(self):
         """Iteratavely sort queries, recomputing scores based on the remaining
         non-matched examples.
         
         # TODO: try multiple orderes if there are equal scores
         """
-        # Max number of queries to cover (at least one)
-        max_iterations = min(max(self._nprl() // 2, 1), self.MAX_NUM_QUERIES_FOR_LINKING) 
+        self._sorta_sort_queries()
+        self._compute_metrics()
+        self._sort_queries()
         
-        sources_unmatched = set(self.current_queries[0].first_scores.keys())
+        og_len = len(self.current_queries)
+        
+        # Max number of queries to cover (at least one)
+        max_iterations = min(max(self._nprl() // 2, 1), self.MAX_NUM_QUERIES_FOR_LINKING)
+        
+        sources_unmatched = set(self.current_queries[0].first_is_match.keys())
         sources_matched = set()
         num_valid_matches = 0
         ordered_queries = []
-        
+        unordered_queries = [q for q in self.current_queries]
+
         for i in range(0, min(max_iterations, len(self.current_queries))):
             if not sources_unmatched:
                 break
@@ -1258,7 +1288,9 @@ class BasicLabeller():
             self._compute_metrics(source_indices=sources_unmatched)
             
             # Get best query with the subset of sources being considered
-            query = self.current_queries[np.argmax([q.score for q in self.current_queries])]
+
+            query = unordered_queries[np.argmax([q.score for q in unordered_queries])]
+            unordered_queries = [q for q in unordered_queries if q != query]
             ordered_queries.append(query)
             
             # Evaluate each un-matched source with the current query being considered
@@ -1270,23 +1302,32 @@ class BasicLabeller():
                         num_valid_matches += int(query.first_is_match[source_id])
             
             # TODO: evaluate contextualized precision and recall
-        
         if sources_matched:
             self.estimated_precision =  num_valid_matches / len(sources_matched)
             self.estimated_recall = num_valid_matches / (len(sources_matched) + len(sources_unmatched))
         else:
             self.estimated_precision = 0
             self.estimated_recall = 0
-        
+            
         print('Iterative sorting led to {} sorted'.format(len(ordered_queries)))
         # List all ordered queries
+        
+        # Put this instead of checking ordered queries directly for performance
+        # issues. Check why __eq__ of queries is not called.
+        iter_sorted_queries = [q for q in ordered_queries]
         for query in self.current_queries:
-            if query not in ordered_queries:
+            if query not in iter_sorted_queries:
                 ordered_queries.append(query)
+                
         self.current_queries = ordered_queries
         self.num_queries_sorted = i + 1
-            
         
+        # TODO: check if we should really do this ?
+        self._compute_metrics()
+        try:
+            assert og_len == len(self.current_queries)
+        except:
+            import pdb; pdb.set_trace()
     
     def majority_vote(self, max_num_voters, min_score=0):
         """ #TODO: Document """
@@ -1311,6 +1352,7 @@ class BasicLabeller():
         best_pair = sorted(list(count.items()), key=lambda x: x[1], reverse=True)[0][0]
         return best_pair
     
+    @time_in
     def _sort_queries(self, by='score'):
         """Sort queries according to parameter (best first).
         
@@ -1321,7 +1363,8 @@ class BasicLabeller():
         """
         self.current_queries = sorted(self.current_queries, 
                                       key=lambda x: getattr(x, by), reverse=True)
-                
+           
+    @time_in
     def _sorta_sort_queries(self):
         """Alternate between random queries and sorted by best Elasticsearch score.
         
@@ -1604,6 +1647,7 @@ class BasicLabeller():
                          self.current_ref_idx, 
                          user_input)
         
+    @time_in
     def update_pair(self, source_idx, ref_idx, user_input):
         '''Update the labeller for any source/ref pair.'''
         if self.current_source_idx != source_idx:
@@ -1700,6 +1744,8 @@ class BasicLabeller():
                 self._next_row()
                 
                 self._sanity_check()
+                
+        _print_time_in()
 
     @print_name
     def _re_score_history(self, call_next_row, learn=False):        
@@ -1847,7 +1893,7 @@ class BasicLabeller():
     
         def wrapper(self, *args, **kwargs):
             #self._sort_queries()
-            self._iterative_metrics_and_sort()
+            # self._iterative_metrics_and_sort() #TODO: check if this is necessary
             log = dict()
             log['func_name'] = func.__name__
             if self.current_queries:
@@ -1888,6 +1934,7 @@ class BasicLabeller():
             return res
         return wrapper
     
+    @time_in
     @print_name
     @_log_wrapper
     @_query_counter_wrapper   
@@ -1904,6 +1951,7 @@ class BasicLabeller():
                                 for queries in queries_by_extended_core.values()]
         self._iterative_metrics_and_sort()
         
+    @time_in
     def filter_(self):
         """Apply filtering on current_queries."""
         FILTER_BY_CORE_IDXS = [10, 20]
@@ -1923,6 +1971,8 @@ class BasicLabeller():
             self.status = 'NO_QUERIES'
             logging.warning('No more queries after filtering')
         
+    
+    @time_in
     def expand(self):
         """Use current state to determin whether or not to use query expansion 
         and which method to use.
@@ -1968,9 +2018,9 @@ class BasicLabeller():
         if self.num_rows_labelled:
             return self.num_positive_rows_labelled[-1]
         else:
-            return 0   
+            return 0
 
-
+    @time_in
     @print_name
     @_log_wrapper
     @_query_counter_wrapper   
@@ -1978,15 +2028,16 @@ class BasicLabeller():
         """Restrict each individual current query to their essential core 
         queries. 
         
-        Remove core queries with too low of a score.
+        Remove queries for which the core score is too low
         """
         MIN_SCORE = 0.2
         cores = [q.core for q in self.single_core_queries if q.score <= MIN_SCORE]
 
-        self.current_queries = list({query.new_template_restricted(cores, ['must']) \
+        self.current_queries = list({query.new_template_restricted(cores, ['must', 'should']) \
                                             for query in self.current_queries})
         self.current_queries = [x for x in self.current_queries if x is not None]
     
+    @time_in
     @print_name
     @_log_wrapper
     @_query_counter_wrapper   
@@ -2015,15 +2066,15 @@ class BasicLabeller():
         # Complex maneuver to avoid copying self.current_queries #TODO: change this ?
         self.current_queries = [x for i, x in enumerate(self.current_queries) \
                                 if i in indices_to_keep]
-        
    
+    @time_in
     @print_name
     @_log_wrapper
     @_query_counter_wrapper   
     def filter_by_num_keys(self):
         """Keep only the best queries.
         
-        Keep only the best queries. N depends on the number of rows with
+        Keep only the N best queries. N depends on the number of rows with
         a match found (aka the number of positive labels). The more labels we
         have, the less queries we keep.
         """
@@ -2043,6 +2094,7 @@ class BasicLabeller():
         # Remove queries according to max number of keys
         self.current_queries = self.current_queries[:_max_num_queries(self)]
 
+    @time_in
     @print_name   
     @_log_wrapper
     @_query_counter_wrapper   
@@ -2060,6 +2112,7 @@ class BasicLabeller():
         self.filter_by_extended_core()
         self.filter_()
 
+    @time_in
     @print_name    
     @_log_wrapper
     @_query_counter_wrapper   

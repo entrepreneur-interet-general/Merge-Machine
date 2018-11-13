@@ -75,7 +75,6 @@ class SingleQueryTemplate():
     def __eq__(self, other):
         return self._as_tuple() == other._as_tuple()
     
-
     def __gt__(self, other):
         return self._as_tuple() > other._as_tuple()
 
@@ -87,6 +86,14 @@ class SingleQueryTemplate():
 
 class CompoundQueryTemplate():
     '''Information regarding a query to be used in the labeller'''
+    
+    def __hash__(self):
+        return sum(x.__hash__() for x in self.musts) + sum(x.__hash__() for x in self.musts)
+
+    def __eq__(self, other):
+        print('using eq')
+        return self.musts == other.musts and self.shoulds == other.shoulds
+    
     def __init__(self, single_query_templates_tuple):    
         '''
         Parameters
