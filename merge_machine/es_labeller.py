@@ -1655,6 +1655,7 @@ class BasicLabeller():
             raise NotImplementedError('Update pair not implemented when update' \
                                       ' concerns a source that is not current')
         
+        start_time = time.time()
         # Interpret answers
         yes = self.VALID_ANSWERS[user_input] == 'y'
         no = self.VALID_ANSWERS[user_input] == 'n'
@@ -1746,7 +1747,9 @@ class BasicLabeller():
                 
                 self._sanity_check()
                 
+        
         _print_time_in()
+        print('update_pair: {}'.format(time.time() - start_time))
 
     @print_name
     def _re_score_history(self, call_next_row, learn=False):        
