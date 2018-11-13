@@ -55,6 +55,7 @@ def time_in(function):
 
 def _print_time_in():
     global TIME_IN
+    print('PRINTING TIME IN:')
     for key, value in TIME_IN.items():
         print('{}: {}s'.format(key, value))
 
