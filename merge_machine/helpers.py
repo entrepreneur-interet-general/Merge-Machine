@@ -490,7 +490,7 @@ def _key_val_er(dict_):
     json keys but are valid as values. The result is a JSON serializable list.
     This operation can be reversed with `_un_key_val_er`.
     '''
-    return [{'__KEY__': key, '__VAL__': value} for key, value in dict_.items()]
+    return [{'K': key, 'V': value} for key, value in dict_.items()] # K for key, V for val
 
 def _un_key_val_er(list_):
     '''Re-creates the original dict from a list created by `_key_val_er`'''
@@ -500,7 +500,7 @@ def _un_key_val_er(list_):
             return tuple(x)
         else:
             return x
-    return {_list_to_tuple(dict_['__KEY__']): dict_['__VAL__'] for dict_ in list_}
+    return {_list_to_tuple(dict_['K']): dict_['V'] for dict_ in list_}
     
 
 def get_header(es, table_name):
