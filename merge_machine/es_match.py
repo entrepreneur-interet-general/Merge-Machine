@@ -385,10 +385,12 @@ def es_linker(es, source, params):
         exact_matches_in_ref = pd.DataFrame([resp['_source'] for resp in full_responses], 
                                             index=exact_source_indices)
         exact_matches_in_ref.columns = [x + '__REF' for x in exact_matches_in_ref.columns]
+        exact_matches_in_ref['__ID_QUERY'] = None
         exact_matches_in_ref['__ID_REF'] = exact_ref_indices
         exact_matches_in_ref['__ES_SCORE'] = 999
         exact_matches_in_ref['__CONFIDENCE'] = 999
         exact_matches_in_ref['__IS_MATCH'] = True
+        exact_matches_in_ref['__THRESH'] = None
         
     else:
         exact_matches_in_ref = pd.DataFrame()
