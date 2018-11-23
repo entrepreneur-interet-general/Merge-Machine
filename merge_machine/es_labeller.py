@@ -1085,13 +1085,14 @@ class BasicLabeller():
         ''' /!\ This function overlaps with _init_ref_gen and could be used in a 
         future simpler version of the project in combination with label_pair
         '''
-        MIN_ES_SCORE_TO_TRESH = 2
+        MIN_ES_SCORE_TO_THRESH = 2
         MAX_NUM_PROPOSALS_PER_QUERY = 4
 
         # Fetch data for current row
         self._fetch_results_for_row()
         
         ref_rows = []
+        num_items = 0
         try:
             for i, query in enumerate(self.current_queries[:max_num_queries]):
     #            self.current_query_ranking = i
@@ -1109,11 +1110,13 @@ class BasicLabeller():
                         
                         # Yield only if probable enough
                         if query.thresh is not None:
-                            if es_score >= (query.thresh / MIN_ES_SCORE_TO_TRESH):
+                            if es_score >= (query.thresh / MIN_ES_SCORE_TO_THRESH):
                                 ref_rows_query.append({'_id': pair[1], '_source': item, '_score': es_score})
                         else:
                             ref_rows_query.append({'_id': pair[1], '_source': item, '_score': es_score})
-                        if len(ref_rows_query) >= max_num_items:
+                        num_items += 1
+                        
+                        if num_items >= max_num_items:
                             raise StopIteration
                 ref_rows.append(ref_rows_query)
         except StopIteration:
@@ -1129,7 +1132,7 @@ class BasicLabeller():
         currently being labelled (`current_source_idx`).
         """
         
-        MIN_ES_SCORE_TO_TRESH = 2
+        MIN_ES_SCORE_TO_THRESH = 2
         MAX_NUM_PROPOSALS_PER_QUERY = 4
 
         # Fetch data for current row
@@ -1153,7 +1156,7 @@ class BasicLabeller():
                             
                             # Yield only if probable enough
                             if query.thresh is not None:
-                                if es_score >= (query.thresh / MIN_ES_SCORE_TO_TRESH):
+                                if es_score >= (query.thresh / MIN_ES_SCORE_TO_THRESH):
                                     yield pair[1], item, es_score
                             else:
                                 yield pair[1], item, es_score
@@ -1258,6 +1261,22 @@ class BasicLabeller():
         for query in self.current_queries:
             query.compute_metrics(self.TARGET_PRECISION, self.TARGET_RECALL, 
                                   source_indices)
+            
+    def _metrics_and_sort(self):
+        METHOD = 'default'
+        
+        if METHOD == 'default':
+            self._default_metrics_and_sort()
+        
+        elif METHOD == 'iterative':
+            self._iterative_metrics_and_sort()
+            
+        
+    @time_in
+    def _default_metrics_and_sort(self):
+        self._sorta_sort_queries()
+        self._compute_metrics()
+        self._sort_queries()        
     
     @time_in
     def _iterative_metrics_and_sort(self):
@@ -1270,7 +1289,9 @@ class BasicLabeller():
         self._compute_metrics()
         self._sort_queries()
         
-        og_len = len(self.current_queries)
+        a = time.time()
+        #og_len = len(self.current_queries)
+        print('set took {}'.format(time.time() - a))
         
         # Max number of queries to cover (at least one)
         max_iterations = min(max(self._nprl() // 2, 1), self.MAX_NUM_QUERIES_FOR_LINKING)
@@ -1325,10 +1346,14 @@ class BasicLabeller():
         
         # TODO: check if we should really do this ?
         self._compute_metrics()
-        try:
-            assert og_len == len(self.current_queries)
-        except:
-            import pdb; pdb.set_trace()
+        
+        # NB: there  are cases where og_len != len(self.current_queries)
+        # because the original self.current_queries has duplicates. We do not
+        # Call set because it is too slow. # TODO: check why set is so slow
+        #        try:
+        #            assert og_len == len(self.current_queries)
+        #        except:
+        #            import pdb; pdb.set_trace()
     
     def majority_vote(self, max_num_voters, min_score=0):
         """ #TODO: Document """
@@ -1712,7 +1737,7 @@ class BasicLabeller():
                 if self.num_positive_rows_labelled[-1]:                
                     if True: 
                         self._sorta_sort_queries()
-                        self._iterative_metrics_and_sort()
+                        self._metrics_and_sort()
             
             # Update core queries
             # TODO: look into batching this
@@ -1835,7 +1860,7 @@ class BasicLabeller():
                 # Re-score metrics
                 # if True: # TODO: use sort_queries
                 self._sorta_sort_queries()
-                self._iterative_metrics_and_sort()
+                self._metrics_and_sort()
                 
                 # Filter queries
                 self.filter_()
@@ -1849,7 +1874,7 @@ class BasicLabeller():
         # if True: # TODO: use sort_queries
         self._sorta_sort_queries()
         # Re-score metrics
-        self._iterative_metrics_and_sort()
+        self._metrics_and_sort()
 
         # Go back to original state
         self.current_source_idx = current_source_idx
@@ -1915,7 +1940,7 @@ class BasicLabeller():
             res = func(self, *args, **kwargs)
 
             # self._sort_queries()
-            self._iterative_metrics_and_sort()
+            self._metrics_and_sort()
             if self.current_queries:    
                 best_query = self.current_queries[0]
                 log['best_query'] = best_query
@@ -1953,7 +1978,7 @@ class BasicLabeller():
             
         self.current_queries = [sorted(queries, key=lambda x: x.score)[-1] \
                                 for queries in queries_by_extended_core.values()]
-        self._iterative_metrics_and_sort()
+        self._metrics_and_sort()
         
     @time_in
     def filter_(self):
@@ -2185,7 +2210,7 @@ class BasicLabeller():
 
         # Re-score metrics
         self._sorta_sort_queries()
-        self._iterative_metrics_and_sort()
+        self._metrics_and_sort()
     
 #    def next_items(self, max_num_items):
         
