@@ -1276,7 +1276,12 @@ class BasicLabeller():
     def _default_metrics_and_sort(self):
         self._sorta_sort_queries()
         self._compute_metrics()
-        self._sort_queries()        
+        self._sort_queries()       
+        
+        self.estimated_precision = self.current_queries[0].precision
+        self.estimated_recall = self.current_queries[0].recall
+        
+        self.num_queries_sorted = 1 #max(len(self.current_queries))
     
     @time_in
     def _iterative_metrics_and_sort(self):
