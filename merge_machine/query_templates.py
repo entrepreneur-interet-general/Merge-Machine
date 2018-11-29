@@ -107,6 +107,7 @@ class CompoundQueryTemplate():
         assert self.musts
 
         self.core = self._core()
+        self.id_ =  hash(self.musts).__str__() + hash(self.shoulds).__str__()
         self.extended_core = self._extended_core()
         self.parent_cores = self._parent_cores()
 
