@@ -291,7 +291,7 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
         # TODO: Check whether or not to re-compute scores 
 
 
-    def compute_metrics(self, t_p=0.95, t_r=0.3, source_indices=None):
+    def compute_metrics(self, t_p=0.965, t_r=0.3, source_indices=None):
         """ 
         Compute the optimal threshold and the associated metrics 
         
@@ -1111,9 +1111,9 @@ class BasicLabeller():
                         # Yield only if probable enough
                         if query.thresh is not None:
                             if es_score >= (query.thresh / MIN_ES_SCORE_TO_THRESH):
-                                ref_rows_query.append({'_id': pair[1], '_source': item, '_score': es_score})
+                                ref_rows_query.append({'_id': pair[1], '_source': item, '_score': es_score, '_query_thresh': query.thresh})
                         else:
-                            ref_rows_query.append({'_id': pair[1], '_source': item, '_score': es_score})
+                            ref_rows_query.append({'_id': pair[1], '_source': item, '_score': es_score, '_query_thresh': None})
                         num_items += 1
                         
                         if num_items >= max_num_items:
@@ -1249,7 +1249,7 @@ class BasicLabeller():
                                    num_results)
 
     @time_in
-    def _compute_metrics(self, source_indices=None):
+    def _compute_metrics(self, source_indices=None, query_ids=None):
         """Compute metrics for each individual query.
         
         Parameters
@@ -1257,10 +1257,19 @@ class BasicLabeller():
         source_indices: list of indices or None
             The indices of the source on which to restrict the computation of
             the metrics. None indicates no restriction.
+        query_ids: list of query ids
+            The indices of the queries for which to re-compute metrics. Use 
+            None to compute on all
         """
-        for query in self.current_queries:
-            query.compute_metrics(self.TARGET_PRECISION, self.TARGET_RECALL, 
-                                  source_indices)
+        
+        if query_ids is None:
+            for query in self.current_queries:
+                query.compute_metrics(self.TARGET_PRECISION, self.TARGET_RECALL, 
+                                      source_indices)
+        else:
+            for query in [q for q in self.current_queries if (q.id_ in query_ids)]:
+                query.compute_metrics(self.TARGET_PRECISION, self.TARGET_RECALL, 
+                                      source_indices)            
             
     def _metrics_and_sort(self):
         METHOD = 'default'
@@ -1341,16 +1350,18 @@ class BasicLabeller():
         
         # Put this instead of checking ordered queries directly for performance
         # issues. Check why __eq__ of queries is not called.
-        iter_sorted_queries = [q for q in ordered_queries]
+        iter_sorted_query_ids = [q.id_ for q in ordered_queries]
+        unsorted_query_ids = []
         for query in self.current_queries:
-            if query not in iter_sorted_queries:
+            if query.id_ not in iter_sorted_query_ids:
                 ordered_queries.append(query)
+                unsorted_query_ids.append(query.id_)
                 
         self.current_queries = ordered_queries
         self.num_queries_sorted = i + 1
         
         # TODO: check if we should really do this ?
-        self._compute_metrics()
+        self._compute_metrics(query_ids=unsorted_query_ids)
         
         # NB: there  are cases where og_len != len(self.current_queries)
         # because the original self.current_queries has duplicates. We do not
