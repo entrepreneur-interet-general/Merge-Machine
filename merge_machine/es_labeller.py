@@ -195,6 +195,7 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
         dict_['query'] = super().to_dict()
         dict_['history_pairs'] = _key_val_er(self.history_pairs)
         dict_['first_scores'] = _key_val_er(self.first_scores)
+        dict_['all_scores'] = _key_val_er(self.all_scores) # added this
         dict_['has_results'] = _key_val_er(self.has_results)
         dict_['first_is_match'] = _key_val_er(self.first_is_match)
         dict_['any_is_match'] = _key_val_er(self.any_is_match)
@@ -214,6 +215,7 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
         lqt = super(LabellerQueryTemplate, cls).from_dict(dict_['query'])
         lqt.history_pairs = {key: [tuple(x) for x in values] for key, values in _un_key_val_er(dict_['history_pairs']).items()}
         lqt.first_scores = _un_key_val_er(dict_['first_scores'])
+        lqt.all_scores = _un_key_val_er(dict_['all_scores'])
         lqt.has_results = _un_key_val_er(dict_['has_results'])
         lqt.first_is_match = _un_key_val_er(dict_['first_is_match'])
         lqt.any_is_match = _un_key_val_er(dict_['any_is_match'])
@@ -244,6 +246,15 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
         self.has_results[source_idx] = bool(pairs)
         self.first_scores[source_idx] = first_score
         self.all_scores[source_idx] = all_scores
+        
+    
+    def _get_score_for_pair(self, source_idx, ref_idx):
+        pairs = self.history_pairs[source_idx]
+        all_scores = self.all_scores[source_idx]
+        assert len(pairs) == len(all_scores)
+        score_lookup_dict = {ref_idx: score \
+                    for (source_idx, ref_idx), score in zip(pairs, all_scores)}
+        return score_lookup_dict[ref_idx]
     
     def add_labelled_pair(self, source_idx, labelled_pair):
         """Update `first_is_match`, `any_is_match` with a labelled pair. 
@@ -280,7 +291,7 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
         """Remove all information regarding labels for `source_id`."""
         # Compute idx to go back to
         
-        # Don't touch history_pairs or first_scores or has_results
+        # Don't touch history_pairs or first_scores, all_scores or has_results
     
         if source_idx in self.first_is_match:
             del self.first_is_match[source_idx]
@@ -881,6 +892,9 @@ class BasicLabeller():
         
         dict_['status'] = self.status
         
+        dict_['TARGET_PRECISION'] = self.TARGET_PRECISION
+        dict_['TARGET_RECALL'] = self.TARGET_RECALL
+        
         # self._init_source_gen() # creates self.source_gen
         return dict_
         
@@ -942,6 +956,9 @@ class BasicLabeller():
         labeller.ref_id_to_data = dict_['ref_id_to_data']
 
         labeller.status = dict_['status']
+        
+        labeller.TARGET_PRECISION = dict_.get('TARGET_PRECISION', 0.95)
+        labeller.TARGET_RECALL = dict_.get('TARGET_RECALL', 0.3)
 
         labeller._sanity_check()
         
@@ -1039,7 +1056,7 @@ class BasicLabeller():
         if self.current_source_idx not in self.current_queries[0].history_pairs:
             results = self.pruned_bulk_search(self.current_queries, 
                             self.current_source_item, self.NUM_SEARCH_RESULTS)
-            self.add_results(results)   
+            self.add_results(results)
 
 
     def _is_exact_match(self, source_item, ref_item):
@@ -1068,13 +1085,11 @@ class BasicLabeller():
         memory first and then Elasticsearch.'''
         # If the data associated to id is in memory
         if ref_idx in self.ref_id_to_data:
-            item = self.ref_id_to_data[ref_idx]['_source'] # TODO: get item if it is not in ref_id_to_data
-            es_score = self.ref_id_to_data[ref_idx]['_score']
+            item = self.ref_id_to_data[ref_idx]['_source']
         # If the data is not in memory, fetch by ID
         else:
             item = self._fetch_ref_item(ref_idx)
-            es_score = 1.23456789 
-        return item, es_score
+        return item
 
     def _get_source_item(self, source_idx):
         '''Get the reference item associated to the index.'''
@@ -1098,15 +1113,16 @@ class BasicLabeller():
     #            self.current_query_ranking = i
     #            self.current_query = query # TODO: for display only
                 ref_rows_query = []
+                
                 for pair in query.history_pairs[self.current_source_idx][:MAX_NUM_PROPOSALS_PER_QUERY]: 
-                    
                     assert pair[0] == self.current_source_idx
     
                     # Check that source does not have match (or No match)
                     # Check that pair was not already labelled          
                     if pair[1] not in [item['_id'] for items in ref_rows for item in items]:
                     
-                        item, es_score = self._get_ref_item(pair[1])
+                        item = self._get_ref_item(pair[1])
+                        es_score = query._get_score_for_pair(pair[0], pair[1])
                         
                         # Yield only if probable enough
                         if query.thresh is not None:
@@ -1121,7 +1137,8 @@ class BasicLabeller():
                 ref_rows.append(ref_rows_query)
         except StopIteration:
             pass
-            
+        
+        print(sum(1 for y in ref_rows for x in y))
         return ref_rows
                                 
                                 
@@ -1152,7 +1169,8 @@ class BasicLabeller():
                         # Check that pair was not already labelled                        
                         if pair not in self.labelled_pairs:
                             
-                            item, es_score = self._get_ref_item(pair[1])
+                            item = self._get_ref_item(pair[1])
+                            es_score = query._get_score_for_pair(pair[0], pair[1])
                             
                             # Yield only if probable enough
                             if query.thresh is not None:
@@ -1267,12 +1285,13 @@ class BasicLabeller():
                 query.compute_metrics(self.TARGET_PRECISION, self.TARGET_RECALL, 
                                       source_indices)
         else:
+            print('Filtered compute metrics computing on {} queries'.format(sum(1 for q in self.current_queries if (q.id_ in query_ids))))
             for query in [q for q in self.current_queries if (q.id_ in query_ids)]:
                 query.compute_metrics(self.TARGET_PRECISION, self.TARGET_RECALL, 
                                       source_indices)            
             
     def _metrics_and_sort(self):
-        METHOD = 'default'
+        METHOD = 'iterative'
         
         if METHOD == 'default':
             self._default_metrics_and_sort()
@@ -1303,12 +1322,8 @@ class BasicLabeller():
         self._compute_metrics()
         self._sort_queries()
         
-        a = time.time()
-        #og_len = len(self.current_queries)
-        print('set took {}'.format(time.time() - a))
-        
         # Max number of queries to cover (at least one)
-        max_iterations = min(max(self._nprl() // 2, 1), self.MAX_NUM_QUERIES_FOR_LINKING)
+        max_iterations = min(max((self._nprl()-4) // 2, 1), self.MAX_NUM_QUERIES_FOR_LINKING)
         
         sources_unmatched = set(self.current_queries[0].first_is_match.keys())
         sources_matched = set()
@@ -1325,8 +1340,8 @@ class BasicLabeller():
             
             # Get best query with the subset of sources being considered
 
-            query = unordered_queries[np.argmax([q.score for q in unordered_queries])]
-            unordered_queries = [q for q in unordered_queries if q != query]
+            query = unordered_queries[np.argmax([getattr(q, 'score') for q in unordered_queries])]
+            unordered_queries = [q for q in unordered_queries if q != query] # TODO: check efficiency
             ordered_queries.append(query)
             
             # Evaluate each un-matched source with the current query being considered
@@ -1630,7 +1645,10 @@ class BasicLabeller():
                 scores = []
             
             # Add the results to the query history
-            query.add_pairs(self.current_source_idx, [(self.current_source_idx, x['_id']) for x in ref_result], score, scores)
+            query.add_pairs(self.current_source_idx, 
+                            [(self.current_source_idx, x['_id']) for x in ref_result], 
+                            score, 
+                            scores)
             
             # Add items ('_source') to memory for faster access at this round
             for res in ref_result:
@@ -1768,7 +1786,7 @@ class BasicLabeller():
 
                     #
                     if ref_idx != self.current_ref_idx:
-                        ref_item, _ = self._get_ref_item(source_idx)
+                        ref_item = self._get_ref_item(source_idx)
                     else:
                         ref_item = self.current_ref_item
                     
@@ -2225,7 +2243,6 @@ class BasicLabeller():
         self.TARGET_RECALL = t_r
 
         # Re-score metrics
-        self._sorta_sort_queries()
         self._metrics_and_sort()
     
 #    def next_items(self, max_num_items):
