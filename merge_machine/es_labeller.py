@@ -589,11 +589,28 @@ class CoreScorerQueryTemplate(SingleQueryTemplate):
         
         self.update_score()
     
+    def unlabel(self):
+        """Remove the last pair added and recompute score."""
+        self.source_lens.pop()
+        self.ref_lens.pop()
+        self.intersect_lens.pop()
+        self.is_match.pop()
+        
+        self.update_score()        
+        
+    
     def update_score(self):
         """Update the score for this query template."""
         
         # Score is mean number of intersections on match
         match_intersect_lens = [x for x, y in zip(self.intersect_lens, self.is_match) if y]
+        
+        # If there are no values to score on set score of 0
+        if not match_intersect_lens:
+            self.score = 0
+            self.yes_or_none_score = 0
+            return
+        
         self.score = sum(x > 0 for x in match_intersect_lens) / len(match_intersect_lens)
         
         # Yes or None on match score. Proportion of matches that have at least
@@ -1471,6 +1488,7 @@ class BasicLabeller():
         # TODO: test that previous is possible
         # Update the current state
         (self.current_source_idx, self.current_ref_idx) = self.labelled_pairs.pop()
+        previous_label = self.labels[(self.current_source_idx, self.current_ref_idx)] # needed for previous on core queries
         del self.labels[(self.current_source_idx, self.current_ref_idx)]
         num_rows_labelled = self.num_rows_labelled.pop()
         self.num_positive_rows_labelled.pop()
@@ -1488,6 +1506,11 @@ class BasicLabeller():
         # Previous on all queries
         for query in self.current_queries:
             query.unlabel(self.current_source_idx)           
+
+        # Previous on all core queries
+        if previous_label == 'y':
+            for core_query in self.single_core_queries:
+                core_query.unlabel()       
 
         # If we just changed source row, re generate 
         if self._nrl() < og_num_rows_labelled:
@@ -1807,8 +1830,8 @@ class BasicLabeller():
                 self._sanity_check()
                 
         
-        _print_time_in()
-        print('update_pair: {}'.format(time.time() - start_time))
+        #        _print_time_in()
+        #        print('update_pair: {}'.format(time.time() - start_time))
 
     @print_name
     def _re_score_history(self, call_next_row, learn=False):        
@@ -1841,7 +1864,7 @@ class BasicLabeller():
 
         # Do not re-score if no labels
         if (not self.num_positive_rows_labelled) or (not self.num_positive_rows_labelled[-1]):
-            self.status = 'NO_ITEMS_TO_LABEL'
+            #self.status = 'NO_ITEMS_TO_LABEL'
             logging.warning('Cannot re-score history: NO_ITEMS_TO_LABEL')
             return
             
@@ -2093,7 +2116,7 @@ class BasicLabeller():
         
         Remove queries for which the core score is too low
         """
-        MIN_SCORE = 0.2
+        MIN_SCORE = 0.1
         cores = [q.core for q in self.single_core_queries if q.score <= MIN_SCORE]
 
         self.current_queries = list({query.new_template_restricted(cores, ['must', 'should']) \
