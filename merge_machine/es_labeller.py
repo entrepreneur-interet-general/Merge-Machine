@@ -2609,7 +2609,7 @@ class ConsoleLabeller(Labeller):
     (p)revious
     (u)ncertain
     (f)orget
-    (quit)
+    (q)uit
     (h)elp'''
 
     
