@@ -101,7 +101,9 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
     # boost = s_q_t[4]
     #==========================================================================
     
-    DEFAULT_FILTER_FIELD = '.french_estab' # TODO: replace by standard or whitespace
+    DEFAULT_FILTER_FIELD = '.standard' # TODO: replace by standard or whitespace
+    # If the file is not indexed along this field, the must / must_not filtering will not work
+    
     # CUTOFF_FREQ = 0.001
     
     query_template = [_reformat_s_q_t(s_q_t) for s_q_t in query_template]
