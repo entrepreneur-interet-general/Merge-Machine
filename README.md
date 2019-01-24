@@ -12,7 +12,7 @@ A python3 library to link a dirty CSV file with a clean reference table. It is m
 
 #### Non-Python Requirements
 
-This library relies on Elasticsearch. We recommend using the last version available. Instructions [here](https://www.elastic.co/guide/en/elasticsearch/reference/current/_installation.html).
+This library relies on Elasticsearch. We used version 5.6.7 for developpment.. We recommend Elasticsearch 5.X. Instructions [here](https://www.elastic.co/guide/en/elasticsearch/reference/current/_installation.html).
 
 #### PIP3 install
 
