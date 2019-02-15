@@ -219,7 +219,6 @@ def _priority_bulk_search(es, index_name, all_queries, rows, must_filters, must_
     
     full_responses = dict()
     for i_query, q in enumerate(all_queries):
-        print('Len rows at query {0} is {1}'.format(i_query, len(rows)))
         partial_rows = [x[1] for x in sorted(rows.items(), key=lambda x: x[0])]
         partial_idxs = [x[0] for x in sorted(rows.items(), key=lambda x: x[0])] # Og row id
         _, partial_response = _bulk_search(es, index_name, 
@@ -293,6 +292,7 @@ def es_linker(es, source, params):
             
     """
     
+   
     index_name = params['index_name']
     queries = params['queries'][:3] # queries is {'template': ..., 'threshold':...} / Max 9 queries
     must_filters = params.get('must', {})
@@ -379,9 +379,7 @@ def es_linker(es, source, params):
     # Perform matching exact (labelled) pairs
     print('Num exact ref indices: {0}'.format(len(exact_ref_indices)))
     if exact_ref_indices:
-        print('Fetching exact matches')
         full_responses = [es.get(index_name, 'structure', ref_idx) for ref_idx in exact_ref_indices]
-        print('Done fetching exact matches')
         exact_matches_in_ref = pd.DataFrame([resp['_source'] for resp in full_responses], 
                                             index=exact_source_indices)
         exact_matches_in_ref.columns = [x + '__REF' for x in exact_matches_in_ref.columns]
