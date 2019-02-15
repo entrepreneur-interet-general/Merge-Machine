@@ -5,6 +5,7 @@ Tools to label matches and learn the optimal query templates for linking.
 """
 from collections import defaultdict
 import copy
+import hashlib
 import itertools
 import json
 import logging
@@ -142,6 +143,7 @@ def _gen_all_query_template_tuples(match_cols, columns_to_index, bool_levels,
     all_query_templates = list(itertools.chain(*[list(itertools.combinations(single_queries, x)) \
                                         for x in range(2, max_num_levels+1)][::-1]))
     # Queries must contain at least two distinct columns (unless one match is mentionned)
+    # TODO: check why removing this creates huge computation
     if len(match_cols) > 1:
         all_query_templates = list(filter(lambda query: len(set((x[1], x[2]) for x in query)) >= 2, \
                                     all_query_templates))
@@ -337,6 +339,7 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
         """
         if source_indices is None:
             source_indices = list(self.any_is_match.keys())
+        # print('Len source_indices: {}'.format(len(source_indices)))
         
         summaries = [{'score': self.first_scores[source_idx], 
                       'has_results': self.has_results[source_idx],
@@ -345,17 +348,22 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
                       for source_idx in self.any_is_match.keys() \
                       if source_idx in source_indices]
         
+        print('Using {} summaries to compute score'.format(len(summaries)))
+        
         # Filter out relevent summaries only (line not forgotten)
         summaries = [summary for summary in summaries if summary['first_is_match'] is not None]
+        # print('Len summaries: {}'.format(len(summaries)))
         
         #
         num_summaries = len(summaries)
+        num_has_results = sum(x['has_results'] for x in summaries)
     
         # Sort summaries by score / NB: 0 score deals with empty hits
         summaries = sorted(summaries, key=lambda x: x['score'], reverse=True)
         
         # score_vect = np.array([x['_score_first'] for x in sorted_summaries])
         is_first_vect = np.array([bool(x['first_is_match']) for x in summaries])
+        has_res_vect = np.array([x['has_results'] for x in summaries]) # for assertion below only
         
         # If no matches are present
         # TODO: eliminates things from start ?
@@ -366,13 +374,13 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
             self.score = 0 
             return self.thresh, self.precision, self.recall, self.score
      
-        
-        rolling_precision = is_first_vect.cumsum() / (np.arange(num_summaries) + 1)
+        assert is_first_vect[~has_res_vect].sum() == 0 # Check that if there are no results, there are no first
+        rolling_precision = is_first_vect.cumsum() / np.minimum(np.arange(num_summaries) + 1, num_has_results)
         rolling_recall = is_first_vect.cumsum() / num_summaries
         
         # Compute custom score
-        _f_precision = lambda x: max(x - t_p, 0) + min(t_p*(x/t_p)**3, t_p)
-        _f_recall = lambda x: max(x - t_r, 0) + min(t_p*(x/t_r)**3, t_r)
+        _f_precision = lambda x: (2*max(x - t_p, 0) + min(t_p*(x/t_p)**4, t_p))**1.5 / 2
+        _f_recall = lambda x: max(x - t_r, 0) + min(t_r*(x/t_r)**4, t_r)
         a = np.fromiter((_f_precision(xi) for xi in rolling_precision), rolling_precision.dtype)
         b = np.fromiter((_f_recall(xi) for xi in rolling_recall), rolling_recall.dtype)
         rolling_score = a*b
@@ -403,6 +411,8 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
         self.precision = precision
         self.recall = recall
         self.score = score
+        
+        print(self.precision, self.recall)
         
         return self.thresh, self.precision, self.recall, self.score
 
@@ -752,8 +762,7 @@ class BasicLabeller():
         return smaller_source
     
     def __init__(self, es, source, ref_index_name, 
-                 match_cols, columns_to_index, 
-                 certain_column_matches=None, 
+                 match_cols, columns_to_index,
                  must={}, must_not={}, next_row=True):
         """        
         Parameters
@@ -795,8 +804,7 @@ class BasicLabeller():
             
         match_cols = [_unlist_match(match) for match in match_cols]
            
-        self.match_cols = match_cols    
-        self.certain_column_matches = certain_column_matches
+        self.match_cols = match_cols
         
         columns_to_index = {key: set(values) for key, values in columns_to_index.items()}
         self.columns_to_index = columns_to_index
@@ -870,8 +878,7 @@ class BasicLabeller():
         
         dict_ = dict()
         
-        dict_['match_cols'] = self.match_cols    
-        dict_['certain_column_matches'] = self.certain_column_matches
+        dict_['match_cols'] = self.match_cols
         dict_['columns_to_index'] = self. columns_to_index
         
         dict_['labelled_pairs'] = self.labelled_pairs
@@ -934,8 +941,7 @@ class BasicLabeller():
             `to_dict`).
         """        
         labeller = cls(es, source, ref_index_name, dict_['match_cols'], 
-                                                dict_['columns_to_index'], 
-                                                dict_['certain_column_matches'], 
+                                                dict_['columns_to_index'],
                                                 dict_['must_filters'], 
                                                 dict_['must_not_filters'],
                                                 next_row=False)
@@ -1206,25 +1212,27 @@ class BasicLabeller():
         This assumes that `source_gen` was initialized.
         """
         NUM_ROW_TRIES = 20
-        
-        for _ in range(NUM_ROW_TRIES):
-            try:
-                self.current_source_idx, self.current_source_item = next(self.source_gen)
-            except:
-                self.status = 'NO_ITEMS_TO_LABEL'
-                break
-            else:
-                self._init_ref_gen()
-                try: 
-                    (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
-                    break
-                except StopIteration:
-                    print(self.current_source_item)
-                    print('WARNING: no results found for the row above; skipping')
-                    self._update_row_count(True, False) # TODO: not tested! 
-        else:
+   
+        if sum(x[1]=="__NO_RESULT" for x in self.labelled_pairs_match[-NUM_ROW_TRIES:]) == NUM_ROW_TRIES: #check if number of no results > NUM_ROW_TRIES
             self.status = 'NO_MATCHES'
             logging.warning('Could not find any resut in {0} consecutive rows'.format(NUM_ROW_TRIES))
+            return
+     
+        try:
+            self.current_source_idx, self.current_source_item = next(self.source_gen)
+        except:
+            self.status = 'NO_ITEMS_TO_LABEL'
+        else:
+            self._init_ref_gen()
+            try: 
+                (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
+            except StopIteration:
+                print(self.current_source_item)
+                print('WARNING: no results found for the row above; skipping')
+                self.update_pair(self.current_source_idx, None, "f") # This will call NEXT ROW (careful not to loop !)
+        
+        
+
 
     @time_in
     def _bulk_search(self, queries_to_perform, row, num_results):
@@ -1302,7 +1310,7 @@ class BasicLabeller():
                 query.compute_metrics(self.TARGET_PRECISION, self.TARGET_RECALL, 
                                       source_indices)
         else:
-            print('Filtered compute metrics computing on {} queries'.format(sum(1 for q in self.current_queries if (q.id_ in query_ids))))
+            print('Compute metrics (on select queries) computing on {} queries'.format(sum(1 for q in self.current_queries if (q.id_ in query_ids))))
             for query in [q for q in self.current_queries if (q.id_ in query_ids)]:
                 query.compute_metrics(self.TARGET_PRECISION, self.TARGET_RECALL, 
                                       source_indices)            
@@ -1348,23 +1356,33 @@ class BasicLabeller():
         ordered_queries = []
         unordered_queries = [q for q in self.current_queries]
 
+
+        SORT_ON = 'score'
         for i in range(0, min(max_iterations, len(self.current_queries))):
+            print('Checking to add query {}'.format(i))
             if not sources_unmatched:
                 break
             if (len(sources_unmatched) <= 3) and i > 0:
                 break
-            self._compute_metrics(source_indices=sources_unmatched)
+            self._compute_metrics(query_ids=[q.id_ for q in unordered_queries], 
+                                  source_indices=sources_unmatched)
             
             # Get best query with the subset of sources being considered
-
-            query = unordered_queries[np.argmax([getattr(q, 'score') for q in unordered_queries])]
+            query = unordered_queries[np.argmax([getattr(q, SORT_ON) for q in unordered_queries])]
+            
+            # Add query only if it improves the global score 
+            # TODO: check if we should do that
+            if bool(ordered_queries) and (query.score < ordered_queries[-1].score):
+                break
+            
             unordered_queries = [q for q in unordered_queries if q != query] # TODO: check efficiency
             ordered_queries.append(query)
+            print('Chose query with precision {} and recall {}'.format(query.precision, query.recall))
             
             # Evaluate each un-matched source with the current query being considered
-            for source_id, score in query.first_scores.items():
+            for source_id, es_score in query.first_scores.items():
                 if source_id in sources_unmatched:
-                    if score >= query.thresh:
+                    if es_score >= query.thresh:
                         sources_matched.add(source_id)
                         sources_unmatched.remove(source_id)
                         num_valid_matches += int(query.first_is_match[source_id])
@@ -1392,8 +1410,9 @@ class BasicLabeller():
         self.current_queries = ordered_queries
         self.num_queries_sorted = i + 1
         
-        # TODO: check if we should really do this ?
+        # TODO: check if we should really do this ? # Wht not before resorting of current_queries
         self._compute_metrics(query_ids=unsorted_query_ids)
+        self._sort_queries(by="score")
         
         # NB: there  are cases where og_len != len(self.current_queries)
         # because the original self.current_queries has duplicates. We do not
@@ -1499,7 +1518,8 @@ class BasicLabeller():
             self.labelled_pairs_match.pop()
 
         self.current_source_item = self._fetch_source_item(self.current_source_idx)
-        self.current_ref_item = self._fetch_ref_item(self.current_ref_idx)   
+        if self.current_ref_idx is not None: # In the case of no results when fetching row
+            self.current_ref_item = self._fetch_ref_item(self.current_ref_idx)
         
         self.current_es_score = None
         
@@ -1518,7 +1538,11 @@ class BasicLabeller():
             self._init_ref_gen()
         # Otherwise just add the current ref element to top of ref_gen pile
         else:
-            self.ref_gen = itertools.chain([r_elem], self.ref_gen)        
+            self.ref_gen = itertools.chain([r_elem], self.ref_gen)
+            
+        # If there are no results for the current row, do previous again
+        if self.current_ref_idx is None:
+            self.previous()
 
         
     def re_train(self):
@@ -1547,7 +1571,7 @@ class BasicLabeller():
         ----------
         certain_columns_matches: dict or list of dict of shape {'source': col_source, 'ref': col_ref}
             Column pair or list of column pairs on which a match is equivalent
-            to an match of the rows.
+            to a match of the rows.
         num_rows_try: int
             The maximum number of rows of the source to try to auto-label.
         update_single_queries: bool
@@ -1656,9 +1680,7 @@ class BasicLabeller():
         self.ref_id_to_data = dict()
         
         assert len(self.current_queries) == len(results)
-        
         for query, ref_result in zip(self.current_queries, results):
-            
             # Get score of best hit or assign zero if there are no results
             if ref_result:
                 score = ref_result[0]['_score']
@@ -1675,8 +1697,8 @@ class BasicLabeller():
             
             # Add items ('_source') to memory for faster access at this round
             for res in ref_result:
-                if res['_id'] not in self.ref_id_to_data:
-                    self.ref_id_to_data[res['_id']] = res
+                #if res['_id'] not in self.ref_id_to_data:
+                self.ref_id_to_data[res['_id']] = res
 
     @print_name
     def _update_row_count(self, at_new_row, last_is_match):
@@ -1789,9 +1811,10 @@ class BasicLabeller():
             # Re-score and sort metrics
             self.add_labelled_pair(labelled_pair)
             
-            # Update metrics
+            # Update metrics unless the nuew pair is not relevant ('__FORGET')
+            # NB: '__NO_RESULT' is relevant for metric re-computing
             if labelled_pair[1] != '__FORGET':
-                if self.num_positive_rows_labelled[-1]:                
+                if self.num_positive_rows_labelled[-1]: # Check that there are positive labels on which to compute metrics           
                     if True: 
                         self._sorta_sort_queries()
                         self._metrics_and_sort()
@@ -1854,7 +1877,7 @@ class BasicLabeller():
         call_next_row: #TODO: document
         learn: bool
             Whether or not to filter and expand queries while adding labels. 
-            If not, only the original queries will be kept.
+            If not, only the queries in current_queries will be used.
         """
         
         if (not learn) and (not self.current_queries):
@@ -2572,6 +2595,86 @@ class SearchLabeller(BasicLabeller):
                 self._update_row_count(True, False) # TODO: not tested! 
                 self._next_row()
                 
+                
+
+class StatsLabeller(BasicLabeller):
+    """Adds logging of performances for each query being tried each time a new
+    row is being labelled.
+    """
+    
+    query_definitions = dict()
+    query_stats = defaultdict(dict) # {query_id: {step: statsdict, ...}, ...}
+    query_order = [] # [[query_id, ...], ...] (of length the number of steps saved)
+    current_step = 0
+    
+    @staticmethod
+    def _q_id(q):
+        return hashlib.md5((q._as_tuple()).__str__().encode('utf-8')).hexdigest()
+    
+    @staticmethod
+    def _create_query_summary(q, position):
+        return {'precision': q.precision,
+                'recall': q.recall,
+                'score': q.score,
+                'position': position}
+        
+    def update_stats(self):
+        """Update the general stats of all queries with the stats at the 
+        current step.
+        """
+        for pos, q in enumerate(self.current_queries):
+            print('in stats: prec: {}, rec: {}'.format(q.precision, q.recall))
+            self.query_definitions.setdefault(self._q_id(q), q._as_tuple())
+            self.query_stats[self._q_id(q)][str(self.current_step)] = self._create_query_summary(q, pos)
+            
+        self.query_order.append([self._q_id(q) for q in self.current_queries])
+        
+        self.current_step += 1
+        
+        self._cleanup(5)
+        
+    def _cleanup(self, num_empty):
+        """Remove stats for queries that were not used since `num_empty` steps."""
+        all_keys = list(self.query_stats.keys())
+        if self.current_step >= num_empty:
+            for query_id in all_keys:
+                if all(query_id not in list_ for list_ in self.query_order[-num_empty:]):
+                    del self.query_stats[query_id]
+        
+        self.query_order = [[x for x in list_ if x in self.query_stats.keys()] for list_ in self.query_order]
+    
+    def _next_row(self):
+        self.update_stats()
+        super()._next_row()
+        
+    def to_dict(self):
+        dict_ = super().to_dict()
+        dict_['query_definitions'] = self.query_definitions
+        dict_['query_stats'] = self.query_stats
+        dict_['query_order'] = self.query_order
+        dict_['current_step'] = self.current_step
+        return dict_
+        
+    @classmethod
+    def from_dict(cls, es, source, ref_index_name, dict_):
+        """Returns an instance of the class using a representation generated 
+        by to_dict.
+        """
+        sl = super(StatsLabeller, cls).from_dict(es, source, ref_index_name, dict_)
+        
+        sl.query_stats = dict_.get('query_definitions', {})
+        sl.query_stats = defaultdict(dict, dict_['query_stats'])
+        sl.query_order = dict_['query_order']
+        sl.current_step = dict_['current_step']
+        return sl
+    
+    def to_emit(self):
+        dict_to_emit = super().to_emit()
+        dict_to_emit['query_definitions'] = self.query_definitions
+        dict_to_emit['query_stats'] = self.query_stats
+        dict_to_emit['query_order'] = self.query_order
+        dict_to_emit['current_step'] = self.current_step
+        return dict_to_emit
             
 class Labeller(SearchLabeller):
     '''Keep this for compatibility.'''
