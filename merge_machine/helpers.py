@@ -103,6 +103,7 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
     
     DEFAULT_FILTER_FIELD = '.standard' # TODO: replace by standard or whitespace
     # If the file is not indexed along this field, the must / must_not filtering will not work
+    DEFAULT_FILTER_FIELDS = ['.standard', '.french_estab', '.english'] # Workaround for global filters to work
     
     # CUTOFF_FREQ = 0.001
     
@@ -141,10 +142,10 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
                 for must_or_should in ['must', 'should']
                 },
                     **{
-                       'must_not': [{'match': {field + DEFAULT_FILTER_FIELD: {'query': ' '.join(values), 'operator': 'or'}}
-                                 } for field, values in must_not_filters.items() if values],
-                       'filter': [{'match_phrase': {field + DEFAULT_FILTER_FIELD: {'query': value}}
-                                 } for field, values in must_filters.items() for value in values],
+                       'must_not': [{'match': {field + analyzer: {'query': ' '.join(values), 'operator': 'or'}}
+                                 } for field, values in must_not_filters.items() if values for analyzer in DEFAULT_FILTER_FIELDS],
+                       'filter': [{'match_phrase': {field + analyzer: {'query': value}}
+                                 } for field, values in must_filters.items() for value in values for analyzer in DEFAULT_FILTER_FIELDS],
                     })               
                   }
            }
