@@ -88,11 +88,17 @@ class CompoundQueryTemplate():
     '''Information regarding a query to be used in the labeller'''
     
     def __hash__(self):
-        return sum(x.__hash__() for x in self.musts) + sum(x.__hash__() for x in self.musts)
+        try:
+            return self.__hash
+        except:
+            self.__hash = hash((q.__hash__() for q in self.musts + self.shoulds))    
+            return self.__hash
 
-    def __eq__(self, other):
-        print('using eq')
-        return self.musts == other.musts and self.shoulds == other.shoulds
+    def __eq__(self, other):        
+        bool_1 = self.musts == other.musts
+        bool_2 = self.shoulds == other.shoulds
+        
+        return bool_1 and bool_2    
     
     def __init__(self, single_query_templates_tuple):    
         '''
@@ -147,20 +153,6 @@ class CompoundQueryTemplate():
             extended_cores.append(must._extended_core())
         return tuple(sorted(extended_cores))
 
-    def __hash__(self):
-        try:
-            return self.__hash
-        except:
-            self.__hash = hash((q.__hash__() for q in self.musts + self.shoulds))    
-            return self.__hash
-
-    def __eq__(self, other):        
-        bool_1 = self.musts == other.musts
-        bool_2 = self.shoulds == other.shoulds
-        
-        return bool_1 and bool_2
-
-
     def __len__(self):
         return len(self.musts) + len(self.shoulds)
 
@@ -175,8 +167,7 @@ class CompoundQueryTemplate():
             to_return = []
             for i in range(1, len(self.core)-1):
                 to_return.extend(list(itertools.combinations(self.core, i)))
-            return to_return        
-    
+            return to_return
     
     def _gen_body(self, row, must_filter={}, must_not_filter={}, num_results=3):
         '''
