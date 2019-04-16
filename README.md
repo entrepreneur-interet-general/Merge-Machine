@@ -56,6 +56,9 @@ This library was developped as a component of larger matching service:
 * ONLINE SERVICE COMING SOON !!!
 * [code](https://github.com/eig-2017/the-magical-csv-merge-machine)
 
+Check out:
+* [The Merge Machine](https://themergemachine.com), A simple web interface to link your data
+
 Other similar libraries include:
 * [match_id](https://github.com/matchID-project) (Identity record linking)
 * [dedupe](https://github.com/dedupeio/dedupe) (Record linking and deduping)
