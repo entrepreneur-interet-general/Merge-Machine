@@ -124,6 +124,48 @@ class CompoundQueryTemplate():
     def add_should(self, query):
         self.shoulds = tuple(sorted(list(self.shoulds) + [query]))
 
+    def prune_analyzers(self):
+        """For all fields used in the query, only keep higher ranking analyzers
+        when multiple analyzers are used on the same field and when an ordering 
+        exists (only acts on "must" analyzers).
+        """        
+        from collections import defaultdict
+        
+        # Define priority: if `key` then delete `values`
+        has_priority = {"": ['french', 'english', 'french_estab', 'standard', 
+                             'n_grams', 'integers', 'city', 'country'],
+                        "special_keyword": ['french', 'english', 'french_estab', 'standard', 
+                             'n_grams', 'integers', 'city', 'country'],
+                        "french": ['n_grams'],
+                        "english": ['n_grams'],
+                        "standard": ['n_grams'],
+                        "french_estab": ['n_grams']
+            }
+        
+        og_num_musts = len(self.musts)
+        
+        temp = defaultdict(list)
+        for new_q in self.musts:
+            analyzers_to_remove = has_priority.get(new_q.analyzer_suffix.strip('.'), [])
+            
+            # Filter out lower priority analyzers 
+            temp[(new_q.source_col, new_q.ref_col)] = [q for q \
+                            in temp[(new_q.source_col, new_q.ref_col)] \
+                            if q.analyzer_suffix.strip('.') not in analyzers_to_remove]
+            
+            # Add analyzer if it is not dominated by an existing 
+            for q in temp[(new_q.source_col, new_q.ref_col)]:
+                if new_q.analyzer_suffix.strip('.') in has_priority.get(q.analyzer_suffix.strip('.'), []):
+                    break
+            else:
+                temp[(new_q.source_col, new_q.ref_col)].append(new_q)
+                
+        # 
+        self.musts = tuple(sorted(sum(temp.values(), [])))    
+        
+#        if len(self.musts) != og_num_musts:
+#        print('Removed {} musts'.format(len(self.musts) - og_num_musts))
+        
     def to_dict(self):
         '''Returns a dict representation of the instance'''
         return [x.to_dict() for x in self.musts + self.shoulds]

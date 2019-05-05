@@ -91,7 +91,7 @@ def _gen_suffix(columns_to_index, s_q_t_2):
         analyzers = set.union(*[columns_to_index[col] for col in s_q_t_2])
     else:
         raise ValueError('s_q_t_2 should be str or tuple (not list)')
-    yield '' # No suffix for standard analyzer
+    yield ".special_keyword" # No suffix for standard analyzer
     for analyzer in analyzers:
         yield '.' + analyzer
 
@@ -348,7 +348,7 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
                       for source_idx in self.any_is_match.keys() \
                       if source_idx in source_indices]
         
-        print('Using {} summaries to compute score'.format(len(summaries)))
+        # print('Using {} summaries to compute score'.format(len(summaries)))
         
         # Filter out relevent summaries only (line not forgotten)
         summaries = [summary for summary in summaries if summary['first_is_match'] is not None]
@@ -412,7 +412,7 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
         self.recall = recall
         self.score = score
         
-        print(self.precision, self.recall)
+        #print(self.precision, self.recall)
         
         return self.thresh, self.precision, self.recall, self.score
 
@@ -495,7 +495,8 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
                         new_query_templates.append(new_query)   
                 else:
                     raise ValueError('Invalid level: {0}; should be must or should')
-        return new_query_templates
+        return new_query_templates        
+        
     
     def new_template_restricted(self, cores_to_remove, bool_levels_to_keep):
         """ Return the a new LabellerQueryTemplate based on the current instance, 
@@ -1044,7 +1045,7 @@ class BasicLabeller():
                                                            self.BOOST_LEVELS, 
                                                            self.MAX_NUM_LEVELS)        
         self.current_queries = [LabellerQueryTemplate(q_t_t) for q_t_t in all_query_template_tuples]            
-
+        self._prune_analyzers(remove_duplicates=True)
     
     def _init_core_queries(self, match_cols, columns_to_index):
         """Generate initial core query templates. to assign to `single_core_queries`."""
@@ -2044,6 +2045,22 @@ class BasicLabeller():
         return wrapper
     
     @time_in
+    @print_name 
+    def _prune_analyzers(self, remove_duplicates=False):
+        """Prune analzyers on each individual query and remove duplicate queries.
+        """
+        import time
+        a  = time.time()
+        for q in self.current_queries:
+            q.prune_analyzers()
+        b = time.time()
+        if remove_duplicates:
+            self.current_queries = list(set(self.current_queries))
+        c = time.time()
+        
+        print('step A: {}s / step B: {}s'.format(b-a, c-a))
+    
+    @time_in
     @print_name
     @_log_wrapper
     @_query_counter_wrapper   
@@ -2215,7 +2232,8 @@ class BasicLabeller():
 
         self.current_queries = list({x for query in self.current_queries \
                                 for x in query.multiply_by_core(cores, ['must'])})
-
+        self._prune_analyzers()
+    
         # TODO: Move back into expand
         self._re_score_history(call_next_row=False) # Also sorts results
         self.filter_by_extended_core()
@@ -2617,13 +2635,14 @@ class StatsLabeller(BasicLabeller):
                 'recall': q.recall,
                 'score': q.score,
                 'position': position}
-        
+
+    @print_name
     def update_stats(self):
         """Update the general stats of all queries with the stats at the 
         current step.
         """
         for pos, q in enumerate(self.current_queries):
-            print('in stats: prec: {}, rec: {}'.format(q.precision, q.recall))
+            # print('in stats: prec: {}, rec: {}'.format(q.precision, q.recall))
             self.query_definitions.setdefault(self._q_id(q), q._as_tuple())
             self.query_stats[self._q_id(q)][str(self.current_step)] = self._create_query_summary(q, pos)
             

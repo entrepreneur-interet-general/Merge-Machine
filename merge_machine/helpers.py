@@ -101,7 +101,7 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
     # boost = s_q_t[4]
     #==========================================================================
     
-    DEFAULT_FILTER_FIELD = '.standard' # TODO: replace by standard or whitespace
+    # DEFAULT_FILTER_FIELD = '.standard' # TODO: replace by standard or whitespace
     # If the file is not indexed along this field, the must / must_not filtering will not work
     DEFAULT_FILTER_FIELDS = ['.standard', '.french_estab', '.english'] # Workaround for global filters to work
     
