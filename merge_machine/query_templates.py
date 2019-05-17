@@ -100,6 +100,9 @@ class CompoundQueryTemplate():
         
         return bool_1 and bool_2    
     
+    def __len__(self):
+        return len(self.musts) + len(self.shoulds) 
+    
     def __init__(self, single_query_templates_tuple):    
         '''
         Parameters
@@ -124,6 +127,32 @@ class CompoundQueryTemplate():
     def add_should(self, query):
         self.shoulds = tuple(sorted(list(self.shoulds) + [query]))
 
+    def is_pruned(self):
+        """Return whether or not the analyzer is pruned; ie: no dominated 
+        analyzers are present.
+        """
+        # Define priority: if `key` then delete `values`
+        has_priority = {"": ['french', 'english', 'french_estab', 'standard', 
+                             'n_grams', 'integers', 'city', 'country'],
+                        "special_keyword": ['french', 'english', 'french_estab', 'standard', 
+                             'n_grams', 'integers', 'city', 'country'],
+                        "french": ['n_grams', 'standard'],
+                        "english": ['n_grams', 'standard'],
+                        "standard": ['n_grams'],
+                        "french_estab": ['n_grams', 'standard']
+            }
+        
+        to_remove = []
+        for q in self.musts:
+            for analyzer in has_priority.get(q.analyzer_suffix.strip('.'), []):
+                to_remove.append((q.source_col, q.ref_col, analyzer))
+        
+        for q in self.musts:
+            if (q.source_col, q.ref_col, q.analyzer_suffix.strip('.')) in to_remove:
+                return False
+        return True
+            
+
     def prune_analyzers(self):
         """For all fields used in the query, only keep higher ranking analyzers
         when multiple analyzers are used on the same field and when an ordering 
@@ -136,10 +165,10 @@ class CompoundQueryTemplate():
                              'n_grams', 'integers', 'city', 'country'],
                         "special_keyword": ['french', 'english', 'french_estab', 'standard', 
                              'n_grams', 'integers', 'city', 'country'],
-                        "french": ['n_grams'],
-                        "english": ['n_grams'],
+                        "french": ['n_grams', 'standard'],
+                        "english": ['n_grams', 'standard'],
                         "standard": ['n_grams'],
-                        "french_estab": ['n_grams']
+                        "french_estab": ['n_grams', 'standard']
             }
         
         og_num_musts = len(self.musts)

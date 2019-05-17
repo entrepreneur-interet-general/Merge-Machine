@@ -487,7 +487,8 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
                     if all(core_query.core != q.core for q in self.musts):
                         new_query = copy.deepcopy(self)
                         new_query.add_must(core_query)
-                        new_query_templates.append(new_query)
+                        if new_query.is_pruned():
+                            new_query_templates.append(new_query)
                 elif level == 'should':
                     if all(core_query.core != q.core for q in self.musts):
                         new_query = copy.deepcopy(self)
@@ -764,7 +765,8 @@ class BasicLabeller():
     
     def __init__(self, es, source, ref_index_name, 
                  match_cols, columns_to_index,
-                 must={}, must_not={}, next_row=True):
+                 must={}, must_not={}, next_row=True, 
+                 use_init_queries=True):
         """        
         Parameters
         ---------- 
@@ -790,6 +792,9 @@ class BasicLabeller():
             Filters retusults on values in columns of referential (must have match).
         must_not: dict of shape {column: list_of_strings, ...}
             Exclude these words from results in referential (cannot have match)
+        use_init_queries: bool
+            Whether or not to call init_queries. Otherwise, the values stay 
+            undefined. #TODO: This should be reorganized.
         """
         
         self.source = self._dedupe_source(source, match_cols)
@@ -819,13 +824,14 @@ class BasicLabeller():
          
         self.must_filters = must
         self.must_not_filters = must_not
-           
-        self._init_queries(match_cols, columns_to_index) # creates self.current_queries
-        self.MIN_NUM_QUERIES = min(self.MIN_NUM_QUERIES, len(self.current_queries)) 
-        self._init_core_queries(match_cols, columns_to_index) # creates self.single_core_queries
-        #self._init_history() # creates self.history
+         
+        if use_init_queries:
+            self._init_queries(match_cols, columns_to_index) # creates self.current_queries
+            self.MIN_NUM_QUERIES = min(self.MIN_NUM_QUERIES, len(self.current_queries)) 
+            self._init_core_queries(match_cols, columns_to_index) # creates self.single_core_queries
+            #self._init_history() # creates self.history
         
-        self._init_source_gen() # creates self.source_gen
+            self._init_source_gen() # creates self.source_gen
         
         self.current_source_idx = None
         self.current_ref_idx = None
@@ -842,8 +848,10 @@ class BasicLabeller():
         
         self.status = 'ACTIVE' # 'ACTIVE', 'NO_ITEMS_TO_LABEL', 'NO_QUERIES', 'NO_MATCHES'
 
-        if next_row:
-            self._next_row()
+
+        if use_init_queries:
+            if next_row:
+                self._next_row()
 
         self._sanity_check()
         
@@ -945,7 +953,8 @@ class BasicLabeller():
                                                 dict_['columns_to_index'],
                                                 dict_['must_filters'], 
                                                 dict_['must_not_filters'],
-                                                next_row=False)
+                                                next_row=False,
+                                                use_init_queries=False)
         
         # Load from dict
         labeller.labelled_pairs = [tuple(x) for x in dict_['labelled_pairs']]
@@ -955,6 +964,7 @@ class BasicLabeller():
         labeller.labelled_pairs_match = [tuple(x) for x in dict_['labelled_pairs_match']]         
         
         labeller.current_queries = [LabellerQueryTemplate.from_dict(x) for x in dict_['current_queries']]
+        labeller.MIN_NUM_QUERIES = min(labeller.MIN_NUM_QUERIES, len(labeller.current_queries)) 
         labeller.single_core_queries = [CoreScorerQueryTemplate.from_dict(x) for x in dict_['single_core_queries']]
         
         labeller._init_source_gen() # creates self.source_gen
@@ -1359,6 +1369,8 @@ class BasicLabeller():
 
 
         SORT_ON = 'score'
+        
+        self.current_queries = sorted(self.current_queries, key=lambda x: len(x))
         for i in range(0, min(max_iterations, len(self.current_queries))):
             print('Checking to add query {}'.format(i))
             if not sources_unmatched:
@@ -2232,8 +2244,8 @@ class BasicLabeller():
 
         self.current_queries = list({x for query in self.current_queries \
                                 for x in query.multiply_by_core(cores, ['must'])})
-        self._prune_analyzers()
-    
+        # NB: query analyzer pruning should be done in multiply_by_cores
+        
         # TODO: Move back into expand
         self._re_score_history(call_next_row=False) # Also sorts results
         self.filter_by_extended_core()
@@ -2257,7 +2269,6 @@ class BasicLabeller():
     @print_name
     def export_best_params(self):
         """Return the parameters for the best query for matching (use in `es_linker`)."""
-  
         params = dict()
         params['index_name'] = self.ref_index_name
         params['queries'] = [{'template': q._as_tuple(), 
