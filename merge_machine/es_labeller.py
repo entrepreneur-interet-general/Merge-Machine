@@ -1327,7 +1327,7 @@ class BasicLabeller():
                                       source_indices)            
             
     def _metrics_and_sort(self):
-        METHOD = 'iterative'
+        METHOD = 'default'
         
         if METHOD == 'default':
             self._default_metrics_and_sort()
